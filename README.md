@@ -1,4 +1,5 @@
 # feno-asthma-diagnostic-meta-analysis
+For the multiple thresholds model meta-analysis 
 
 PROSPERO: [CRD42023489738](https://www.crd.york.ac.uk/prospero/display_record.php?RecordID=489738)
 DIVE cohort: [NCT05592519](https://clinicaltrials.gov/study/NCT05592519)
@@ -26,9 +27,7 @@ Each MasterData file contains one sheet per analysis subgroup. Sheets use a cons
 - Creates PPV/NPV panels across prevalence levels with confidence intervals
 
 To reproduce the analysis
-
-Open `SLP MTM analysis.Rproj` in RStudio, then run:
-
+Run:
 ```r
 source("2026_04_02_All_table.R")  # ~5 min (bootstrap)
 source("2026_04_02_All_plot.R")   # ~2 min
