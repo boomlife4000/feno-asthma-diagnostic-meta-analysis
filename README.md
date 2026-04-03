@@ -29,8 +29,8 @@ Each MasterData file contains one sheet per analysis subgroup. Sheets use a cons
 To reproduce the analysis
 Run:
 ```r
-source("2026_04_02_All_table.R")  # ~5 min (bootstrap)
-source("2026_04_02_All_plot.R")   # ~2 min
+source("2026_04_02_All_table.R")  
+source("2026_04_02_All_plot.R")   
 ```
 
 Note: Bootstrap CIs (LR+, LR−) are stochastic (B = 500) and will vary slightly between runs
