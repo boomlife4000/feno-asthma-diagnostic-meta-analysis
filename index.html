@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FeNO Interpretation Tool</title>
+<style>
+:root{
+  --txt:#1a1a1a; --txt2:#5a6470; --bdr:#d8dce1; --bg:#ffffff; --bg2:#f4f6f8;
+  --info-bg:#e8f0fe; --info-tx:#1b4db3; --info-bd:#9db8f0;
+  --warn-bg:#fdecea; --warn-tx:#a3261d; --warn-bd:#f0b4ad;
+  --ok:#5d8f1f; --in:#b3700f; --rad:10px;
+}
+:root[data-theme="dark"]{
+  --txt:#e6e8eb; --txt2:#9aa3ad; --bdr:#3a3f45; --bg:#121316; --bg2:#1b1d20;
+  --info-bg:#14233f; --info-tx:#9db8f0; --info-bd:#2c4a7a;
+  --warn-bg:#2b1513; --warn-tx:#f1b0a8; --warn-bd:#5e2620;
+  --ok:#8fc34a; --in:#e0a44a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --txt:#e6e8eb; --txt2:#9aa3ad; --bdr:#3a3f45; --bg:#121316; --bg2:#1b1d20;
+    --info-bg:#14233f; --info-tx:#9db8f0; --info-bd:#2c4a7a;
+    --warn-bg:#2b1513; --warn-tx:#f1b0a8; --warn-bd:#5e2620;
+    --ok:#8fc34a; --in:#e0a44a;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:20px 18px 60px}
+h1{font-size:21px;margin:0 0 2px;font-weight:600;letter-spacing:-.01em}
+h2{font-size:18px;margin:26px 0 8px;font-weight:600;color:var(--txt)}
+h3{font-size:16px;margin:18px 0 4px;font-weight:600;color:var(--txt)}
+p{margin:8px 0}
+a{color:var(--info-tx)}
+.sub{color:var(--txt2);font-size:13px;margin:0 0 14px}
+.disc{background:var(--bg2);border:1px solid var(--bdr);border-left:3px solid var(--info-bd);border-radius:var(--rad);padding:9px 12px;font-size:12.5px;color:var(--txt2);margin:12px 0 18px}
+.disc b{color:var(--txt)}
+.vread{font-size:14px;margin:10px 0 4px;padding:11px 13px}
+.vread .h{font-weight:600;font-size:14.5px;color:var(--txt);margin-bottom:3px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--bdr);margin-bottom:18px}
+.tabs button{font:inherit;font-size:14px;font-weight:500;padding:9px 14px;border:0;background:transparent;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--info-tx);border-bottom-color:var(--info-tx)}
+.row{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.fld{display:flex;flex-direction:column;gap:5px}
+.lbl{font-size:12px;color:var(--txt);font-weight:500;text-transform:uppercase;letter-spacing:.03em}
+.seg{display:inline-flex;gap:0;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;width:max-content}
+.seg button{font:inherit;font-size:13px;padding:6px 12px;border:0;border-left:1px solid var(--bdr);background:transparent;cursor:pointer;color:var(--txt)}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--info-bg);color:var(--info-tx)}
+.seg.warnseg button.on{background:var(--warn-bg);color:var(--warn-tx)}
+input[type=range]{accent-color:var(--info-tx)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.chips button{font:inherit;font-size:12px;padding:4px 9px;border:1px solid var(--bdr);background:transparent;color:var(--txt2);border-radius:20px;cursor:pointer}
+.chips button.on{background:var(--info-bg);color:var(--info-tx);border-color:var(--info-bd)}
+#barWrap{margin:16px 0 4px;min-height:130px}
+.cards{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 4px}
+.mc{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rad);padding:11px 13px;flex:1 1 240px;min-width:0}
+.mc .l{font-size:12.5px;color:var(--txt);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.mc .v{font-size:23px;font-weight:700;margin-top:5px;letter-spacing:-.01em}
+.mc .d{font-size:14.5px;color:#1f2937;margin-top:9px;line-height:1.55;font-weight:400}
+.mc.ok{border-top:3px solid var(--ok)} .mc.grey{border-top:3px solid var(--txt2)} .mc.in{border-top:3px solid var(--in)} .mc.grey .l{font-size:11px;letter-spacing:0}
+.mc.warn{border-color:var(--warn-bd);background:var(--warn-bg)}
+.interp{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.blk{border:1px solid var(--bdr);border-radius:var(--rad);padding:10px 12px;font-size:14px;background:var(--bg)}
+.blk .h{font-weight:600;font-size:14px;margin-bottom:2px;color:var(--txt)}
+.blk.ok{border-left:3px solid var(--ok)} .blk.in{border-left:3px solid var(--in)} .blk.grey{border-left:3px solid var(--txt2)}
+.blk.warn{border-left:3px solid var(--warn-tx);background:var(--warn-bg);color:var(--warn-tx)}
+.blk.warn .h{color:var(--warn-tx)}
+.blk.note{border-left:3px solid var(--info-bd);background:var(--info-bg);color:var(--info-tx)}
+.foot{font-size:12px;color:var(--txt2);margin-top:10px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btns button{font:inherit;font-size:13px;padding:7px 12px;border:1px solid var(--bdr);background:var(--bg2);color:var(--txt);border-radius:8px;cursor:pointer}
+.theme{margin-left:auto}
+details{border:1px solid var(--bdr);border-radius:var(--rad);padding:0 12px;margin:8px 0;background:var(--bg)}
+details>summary{cursor:pointer;font-weight:600;font-size:15px;padding:10px 0;list-style:none;color:var(--txt)}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"›";display:inline-block;margin-right:8px;transition:transform .15s;color:var(--txt2)}
+details[open]>summary::before{transform:rotate(90deg)}
+details .body{padding:0 0 12px}
+table.lk{border-collapse:collapse;font-size:12.5px;width:100%;margin:6px 0}
+table.lk th,table.lk td{border:1px solid var(--bdr);padding:4px 8px;text-align:center}
+table.lk th{background:var(--bg2);font-weight:600}
+.kv{font-size:15px}
+.kv b{font-variant-numeric:tabular-nums}
+.hidden{display:none}
+@media print{
+  .tabs,.btns,.chips,.theme{display:none!important}
+  #guide{display:block!important}
+  .wrap{max-width:none}
+  body{font-size:12px}
+}
+</style>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+:root{--txt:#0f172a;--txt2:#5b6b7b;--bdr:#e2e8f0;--bg:#f4f8fa;--bg2:#ffffff;--info-bg:#dff1f3;--info-tx:#0e7490;--info-bd:#7cccd4;--warn-bg:#fff4ea;--warn-tx:#b45309;--warn-bd:#f6d4a6;--ok:#0f9d8a;--in:#dd8a1c;--rad:12px}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg)}
+.wrap{max-width:880px}
+.brand{display:flex;align-items:center;gap:14px;padding:20px 0 8px}
+.brand-mark{width:44px;height:44px;border-radius:13px;background:var(--info-tx);color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.brand-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--info-tx);font-weight:600}
+.brand h1{font-size:23px;font-weight:600;margin:3px 0 0;letter-spacing:-.01em}
+.tabs button{font-weight:500}
+.mc{border-radius:14px;border-color:#eef2f6;box-shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.05)}
+.mc .v{font-weight:700}
+.disc{border-left-color:var(--info-tx)}
+.btns button{border-radius:10px}
+.langsel{margin-left:auto;font-size:12px}
+.langsel button{padding:5px 10px;font-weight:600}
+details{border-radius:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h9.5a2.8 2.8 0 1 0-2.8-2.8"/><path d="M3 14h12.5a2.8 2.8 0 1 1-2.8 2.8"/><path d="M3 19h7"/></svg></span>
+    <span class="brand-text"><span class="brand-eyebrow" data-i18n="eyebrow">Clinical decision aid</span><h1 data-i18n="title">FeNO Interpretation Tool</h1></span>
+    <span class="seg langsel" id="langsel"><button data-l="en" class="on">EN</button><button data-l="fr">FR</button><button data-l="es">ES</button></span>
+  </header>
+  <div class="tabs">
+    <button id="tabExp" class="on" onclick="showTab('exp')" data-i18n="tabCalc">Calculator</button>
+    <button id="tabGuide" onclick="showTab('guide')" data-i18n="tabGuide">Guide &amp; evidence</button>
+  </div>
+
+  <!-- CALCULATOR -->
+  <section id="exp">
+    <div class="row" style="gap:22px">
+      <div class="fld">
+        <span class="lbl" data-i18n="lblAge">Age group</span>
+        <span class="seg" id="age"><button data-v="Adults" class="on" data-i18n="optAdults">Adults</button><button data-v="Children" data-i18n="optChildren">Children</button></span>
+      </div>
+      <div class="fld">
+        <span class="lbl" data-i18n="lblFeno">Patient FeNO (ppb)</span>
+        <input type="number" id="feno" min="5" max="250" step="1" placeholder="e.g. 45" inputmode="numeric" style="width:96px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--bdr);border-radius:8px;background:var(--bg);color:var(--txt)">
+      </div>
+      <div class="fld">
+        <span class="lbl" data-i18n="lblIcs">On inhaled corticosteroids</span>
+        <span class="seg" id="ics"><button data-v="No" class="on" data-i18n="optNo">No</button><button data-v="Yes" data-i18n="optYes">Yes</button></span>
+      </div>
+    </div>
+    <div class="row" style="gap:22px;margin-top:14px">
+      <div class="fld">
+        <span class="lbl" data-i18n="lblNpv">Rule-out NPV ≥</span>
+        <span class="seg" id="npv"><button data-v="80">80</button><button data-v="85">85</button><button data-v="90" class="on">90 ★</button><button data-v="95">95</button></span>
+      </div>
+      <div class="fld">
+        <span class="lbl" data-i18n="lblPpv">Rule-in PPV ≥</span>
+        <span class="seg" id="ppv"><button data-v="80" class="on">80 ★</button><button data-v="85">85</button><button data-v="90">90</button><button data-v="95">95</button></span>
+      </div>
+      <div class="fld">
+        <span class="lbl" data-i18n="lblMiss">Missed diagnoses with rule-out ≤</span>
+        <span class="seg" id="miss"><button data-v="10">10%</button><button data-v="15">15%</button><button data-v="20" class="on">20% ★</button><button data-v="25">25%</button><button data-v="30">30%</button><button data-v="35">35%</button></span>
+      </div>
+    </div>
+    <p class="foot" style="margin-top:8px" data-i18n-html="starNote"><b>★ Suggested operating thresholds:</b> rule-in at PPV ≥80%; rule-out at NPV ≥90% with no more than ~20% missed (sensitivity ≥80%).<sup>1</sup></p>
+
+    <div class="fld" style="margin-top:16px">
+      <span class="lbl" data-i18n="lblPrev">Pre-test probability</span>
+      <div class="row" style="gap:10px">
+        <input type="range" id="prev" min="5" max="80" step="1" value="20" style="flex:1;min-width:200px">
+        <span style="font-size:15px;font-weight:600;min-width:38px;font-variant-numeric:tabular-nums" id="prevOut">20%</span>
+      </div>
+      <div class="chips" id="presets">
+        <button data-v="20" data-i18n="presetPrimary">Primary care ~20%</button>
+        <button data-v="40" id="presetSpec">Specialist care ~40%</button>
+        <button data-v="67" data-i18n="presetReported">Patient-reported physician-diagnosed asthma ~67%</button>
+      </div>
+    </div>
+
+    <div id="barWrap"><div id="bar"></div></div>
+    <div id="ahrOut" class="disc vread" style="display:none"></div>
+
+    <div class="cards" id="cards">
+      <div class="mc ok" id="mcOut"><div class="l" data-i18n="cardOut">Rule-out</div><div class="v" id="cOut">–</div><div class="d" id="dOut"></div></div>
+      <div class="mc grey"><div class="l" data-i18n="cardGrey">Grey zone</div><div class="v" id="cW">–</div><div class="d" id="dW"></div></div>
+      <div class="mc in"><div class="l" data-i18n="cardIn">Rule-in</div><div class="v" id="cIn">–</div><div class="d" id="dIn"></div></div>
+    </div>
+
+    <div class="blk warn" id="icsWarn" style="margin-top:12px;display:none">
+      <div class="h" data-i18n="icsWarnTitle">⚠ Less reliable in patients on inhaled corticosteroids</div>
+      <span data-i18n-html="icsWarnBody">Inhaled corticosteroids suppress FeNO; as such, a low value in a treated patient may not exclude asthma. Test or re-test FeNO after withholding ICS ≥2 weeks for best diagnostic accuracy, as the above thresholds mostly apply in those circumstances as well as in ICS-naïve patients.<sup>1,2</sup></span>
+    </div>
+
+    <div class="interp" id="interp"></div>
+
+    <div id="freq"></div>
+
+    <div class="btns">
+      <button onclick="exportPng()" data-i18n="btnPng">Download chart (PNG)</button>
+      <button onclick="window.print()" data-i18n="btnPrint">Print / Save PDF</button>
+    </div>
+    <p class="foot" style="margin-top:14px" data-i18n-html="acronyms"><b>PPV</b> = positive predictive value; <b>NPV</b> = negative predictive value.</p>
+    <div class="disc" data-i18n-html="banner" style="margin:18px 0 0">
+      Built from a meta-analysis of 30 studies and a single-centre prospective validation in adults (Roy MA, Gronnier M, et al. <i>The Lancet Respiratory Medicine</i>, 2026).
+    </div>
+  </section>
+
+  <!-- GUIDE -->
+  <section id="guide" class="hidden">
+    <h2>How to read this tool</h2>
+    <p>Select the age group and set the pre-test probability for the referral pathway. The tool returns two thresholds that divide FeNO into three zones:</p>
+    <ul style="margin:8px 0;padding-left:20px">
+      <li style="margin:5px 0"><b>Below the rule-out threshold</b> (FeNO < rule-out): airway hyperresponsiveness is unlikely, and asthma can be excluded without a bronchial provocation test.</li>
+      <li style="margin:5px 0"><b>Above the rule-in threshold</b> (FeNO ≥ rule-in): a positive provocation test is likely.</li>
+      <li style="margin:5px 0"><b>Between the two</b>: this is the grey zone, where neither rule applies and a bronchial provocation test is most informative.</li>
+    </ul>
+
+    <h3>Selecting pre-test probability</h3>
+    <p class="kv">Ideally, the pre-test probability for a referral pathway should be assessed against your own setting, to best inform use of this tool in your community. The clinically relevant estimates provided here are drawn from our tertiary centre, our primary-care referrals, and the pooled prevalence of asthma across the studies in our meta-analysis: primary care <b>~20%</b>, specialist care <b>~40%</b> in adults (<b>~56%</b> in children), and patient-reported physician-diagnosed asthma <b>~67%</b>.<sup>1</sup> Select the context closest to your patient, or set your own with the slider.</p>
+
+    <h3>Selecting NPV and PPV thresholds</h3>
+    <p class="kv">The suggested operating thresholds are rule-in at PPV ≥80% and rule-out at NPV ≥90% combined with sensitivity ≥80%.<sup>1</sup> The sensitivity requirement matters because, in a low-prevalence setting, NPV can stay high while sensitivity is only modest, so a high-NPV rule-out can still miss a large share of asthmatics; requiring sensitivity ≥80% caps that miss at roughly one in five and, in adults at ~20% prevalence, lowers the rule-out from about 30 to < 20 ppb. The rule-out is held to a higher confidence than the rule-in because a missed diagnosis carries more risk than over-diagnosis: a patient with undiagnosed asthma remains at risk of exacerbations and untreated asthma complications, whereas a patient with a false-positive result could be exposed to unwarranted asthma therapy. This follows the logic of bronchial provocation testing itself, whose cut-points are chosen for high sensitivity and negative predictive value, so that a negative test reliably excludes current asthma.<sup>3</sup> Raising the NPV or sensitivity requirement reduces missed asthma but narrows the rule-out zone; raising the PPV reduces over-diagnosis but raises the rule-in threshold.</p>
+
+    <h3>Interpretation and usage</h3>
+    <p class="kv">The three zones (rule-out, grey zone, and rule-in) quantify how the chosen thresholds would classify a patient. The grey zone widens as a higher confidence level is required, and at some prevalences a threshold is not achievable (for example, no rule-out at high prevalence, or no rule-in at low prevalence in children). Applied this way at a prevalence of 20% in our centre, the thresholds classified approximately 81% of primary-care referrals and were correct in approximately 90%, suggesting that around 80% of referrals for bronchial provocation testing could be averted.<sup>1</sup></p>
+
+    <h3>A multimodal approach</h3>
+    <p>Biomarkers are best interpreted in clinical context rather than in isolation, analogous to obstructive sleep apnoea, where a high pre-test probability calculated by simple tools such as STOP-BANG determines the value of portable testing. Pre-test probability rises with supportive features; for example, Schneider et al. diagnosed asthma in primary care with a high degree of certainty in the presence of allergic rhinitis and wheezing at a FeNO of 33 ppb. A multivariable tool to refine pre-test probability remains a research priority.</p>
+
+    <h2>Limitations</h2>
+    <details><summary>1 · ICS suppresses FeNO</summary><div class="body">Inhaled corticosteroids lower FeNO, so a low value in a treated patient can be a false negative. These thresholds were derived largely from ICS-naïve patients; in DIVE, a ≤30 ppb rule-out retained an NPV of 98% in ICS-naïve patients versus 88% on ICS. Where possible, measure FeNO before ICS or after at least two weeks of withdrawal, as exhaled nitric oxide may remain suppressed for around 18 days.<sup>1,2</sup></div></details>
+    <details><summary>2 · Rule-out misses (false negatives)</summary><div class="body">A rule-out misclassifies <b>1 − NPV</b> of cases (about 7% at the adult rule-out of < 20 ppb and ~8% for children at < 15 ppb, and less at a higher NPV), compared with under 5% for a bronchial provocation test.<sup>1</sup> A false negative carries greater consequence than a false positive, as a missed diagnosis leaves an at-risk patient untreated; persistent suspicion despite a low FeNO, particularly with features of type-2-low asthma, warrants further investigation.</div></details>
+    <details><summary>3 · Rule-in misses (false positives)</summary><div class="body">A rule-in misclassifies <b>1 − PPV</b> of cases (approximately 20% at the suggested PPV ≥80%, and fewer at a higher PPV). A raised FeNO is not specific to asthma; eosinophilic bronchitis, sinonasal and allergic disease, and indirect airway hyperresponsiveness may also raise it. Because a rule-in leads to a confirmatory provocation test, a false positive carries less consequence than a missed diagnosis.</div></details>
+    <details><summary>4 · Children: not a standalone primary-care test</summary><div class="body">No FeNO threshold met rule-in likelihood-ratio criteria below ~40% pre-test probability in children; acceptable rule-in performance appears only in higher-prevalence (specialty) settings. The tool disables rule-in where it is not achievable.</div></details>
+    <details><summary>5 · Blood eosinophils are not included</summary><div class="body">The blood eosinophil count performed weakly in adults (AUC ~0.65), added no value beyond FeNO, and no paediatric data were available; it is therefore not included here.</div></details>
+    <details><summary>6 · Uncontrolled confounders</summary><div class="body">FeNO varies with age, height, ethnicity, atopy, smoking, measurement method, time of day, and day-to-day variation, none of which could be controlled in the meta-analysis; a single value should be interpreted accordingly.</div></details>
+    <details><summary>7 · FeNO predicts airway hyperresponsiveness, not asthma</summary><div class="body">The reference standard throughout is a bronchial provocation test (PD20/PC20). FeNO reflects type-2 airway inflammation and predicts airway hyperresponsiveness; a diagnosis of asthma requires the full clinical context.</div></details>
+    <details><summary>8 · Validation is single-centre and in adults</summary><div class="body">Prospective validation (DIVE) was conducted at a single centre in adults, using a protocolised referral pathway. Validation across multiple sites and in children is warranted, and generalisability to other settings may be limited.</div></details>
+
+    <h2>Common questions</h2>
+    <details><summary>Can I still rule out if my patient is on ICS?</summary><div class="body">Use caution. ICS can suppress FeNO, so a low value may not exclude asthma. The rule-out was validated in steroid-naïve work-up. Consider testing before/without ICS, or proceed to bronchial provocation testing if suspicion persists.</div></details>
+    <details><summary>Why is FeNO high when the provocation test is negative?</summary><div class="body">This is expected in approximately 20% (false positives): eosinophilic bronchitis, sinonasal and allergic disease, and indirect airway hyperresponsiveness can raise FeNO when the bronchial provocation test is negative.</div></details>
+    <details><summary>FeNO is low but I still suspect asthma</summary><div class="body">About 7% of ruled-out adults (and ~8% of children) are false negatives, compared with under 5% for a bronchial provocation test. If clinical suspicion remains high, particularly with features of type-2-low asthma, further investigation is warranted.</div></details>
+    <details><summary>Does device or time of day matter?</summary><div class="body">Yes. Use a standardised device; values vary with device, time of day, atopy, smoking, height, ethnicity, and from day to day, so a single reading should be interpreted with these in mind.</div></details>
+
+    <h2>Evidence at a glance</h2>
+    <p class="kv">Meta-analysis: 30 studies, &gt;8,000 patients with suspected asthma and normal spirometry. Adult FeNO AUC <b>0.80</b> (k=22); paediatric FeNO AUC <b>0.75</b> (k=9).</p>
+    <p class="kv">Prospective validation (DIVE, adults, single-centre): n=123, asthma prevalence 18%, FeNO AUC <b>0.77</b> (95% CI 0.65–0.89), with stronger discrimination in steroid-naïve patients.</p>
+
+    <h2>Source &amp; references</h2>
+    <p class="kv"><sup>1</sup> Roy MA, Gronnier M, et al. Accuracy of type-2 inflammatory biomarkers to predict airway hyperresponsiveness in adults and children with suspected asthma: a meta-analysis of 30 studies with prospective primary-care validation. <i>The Lancet Respiratory Medicine</i> (2026).</p>
+    <p class="kv"><sup>2</sup> Bardsley G, Daley-Yates P, Baines A, et al. Anti-inflammatory duration of action of fluticasone furoate/vilanterol trifenatate in asthma: a cross-over randomised controlled trial. <i>Respir Res.</i> 2018;19:133. doi:10.1186/s12931-018-0836-6. (FeNO remained suppressed ~18 days after stopping ICS.)</p>
+    <p class="kv"><sup>3</sup> Cockcroft DW. Direct challenge tests: airway hyperresponsiveness in asthma: its measurement and clinical significance. <i>Chest.</i> 2010;138(2 Suppl):18S–24S. doi:10.1378/chest.10-0088.</p>
+    <p class="kv">PROSPERO CRD42023489738 · ClinicalTrials.gov NCT05592519 · Code/data: github.com/boomlife4000/feno-asthma-diagnostic-meta-analysis</p>
+  </section>
+</div>
+
+<script>
+/* ---- Threshold engine: driven ONLY by the published E18/E19 lookup tables.
+   Do NOT reconstruct from Table 2 Se/Sp; an OLS refit lands PPV>=80% at ~58 not 65 ppb. */
+var E18A={80:3,79:9,78:11,77:12,76:13,75:14,74:15,73:16,72:17,71:17,70:18,69:19,68:19,67:20,66:20,65:21,64:21,63:22,62:23,61:23,60:24,59:24,58:25,57:25,56:26,55:27,54:27,53:28,52:28,51:29,50:30,49:30,48:31,47:31,46:32,45:33,44:33,43:34,42:35,41:36,40:36,39:37,38:38,37:39,36:40,35:41,34:42,33:43,32:44,31:45,30:46,29:48,28:49,27:51,26:52,25:54,24:56,23:58,22:60,21:62,20:65,19:68,18:71,17:74,16:78,15:83,14:88,13:94,12:102,11:110,10:121,9:134,8:150,7:172,6:200,5:241};
+var E18P={80:1,79:5,78:7,77:8,76:9,75:10,74:11,73:12,72:13,71:14,70:15,69:16,68:16,67:17,66:18,65:19,64:20,63:21,62:22,61:23,60:25,59:26,58:27,57:28,56:30,55:32,54:34,53:36,52:38,51:41,50:44,49:47,48:52,47:57,46:64,45:74,44:88,43:112,42:154,41:243};
+var E19A={11:103,12:74,13:60,14:52,15:46,16:42,17:38,18:35,19:33,20:30,21:28,22:27,23:25,24:23,25:21,26:19,27:17};
+var E19P={11:70,12:49,13:40,14:34,15:30,16:27,17:24,18:22,19:20,20:19,21:17,22:16,23:15,24:14,25:13,26:11,27:10,28:9,29:8,30:7,31:6,32:4};
+function buildLRp(E){var a=[],p;for(p in E)a.push({c:E[p],lr:4*(100-p)/p});a.sort(function(x,y){return x.c-y.c;});return a;}
+function buildLRm(E){var a=[],p;for(p in E)a.push({c:E[p],lr:(1/9)*(100-p)/p});a.sort(function(x,y){return x.c-y.c;});return a;}
+var LRp={Adults:buildLRp(E18A),Children:buildLRp(E18P)};
+var LRm={Adults:buildLRm(E19A),Children:buildLRm(E19P)};
+function invert(pts,target){
+  if(target<pts[0].lr) return {c:pts[0].c,oob:'below'};
+  if(target>pts[pts.length-1].lr) return {c:pts[pts.length-1].c,oob:'above'};
+  for(var i=1;i<pts.length;i++){if(pts[i].lr>=target){var a=pts[i-1],b=pts[i],f=(b.lr-a.lr)?(target-a.lr)/(b.lr-a.lr):0;return {c:a.c+f*(b.c-a.c),oob:null};}}
+  return {c:pts[pts.length-1].c,oob:'above'};
+}
+function ruleIn(age,prev,t){var req=(t/(1-t))*((100-prev)/prev),r=invert(LRp[age],req);return {na:(r.oob==='above'),extrap:(r.oob==='below'),c:Math.round(r.c)};}
+var SENSCUT_A={35:28,30:26,25:23,20:19,15:17,10:13}, SENSCUT_P={35:21,30:19,25:16,20:14,15:12,10:10}; /* FeNO (ppb): largest cutoff whose missed-diagnoses (1-Sens) <= key%; key = miss% = 100-Sens% (primary BPT_PC20<8). NOTE: adult 20->19 hard-coded to the manuscript rule-out FeNO < 20 ppb (the model's miss<=20% cutoff is 20). */
+function ruleOut(age,prev,t,missPct){var req=((1-t)/t)*((100-prev)/prev),r=invert(LRm[age],req);if(r.oob==='below')return {na:true,c:0};var cap=(age==='Children')?SENSCUT_P[missPct]:SENSCUT_A[missPct],c=r.c,sc=false;if(c>cap){c=cap;sc=true;}return {na:false,extrap:(r.oob==='above'&&!sc),c:Math.round(c),sensCap:sc};}
+/* Per-cutoff dichotomous likelihood ratios from the primary multiple-threshold
+   meta-analysis (BPT, PC20<8), diagmeta output: LR+ for FeNO above the cut-off,
+   LR- for FeNO at/below it. Index i = FeNO (i+5) ppb, range 5..100. */
+var LRPOS_A=[1.008,1.017,1.032,1.053,1.081,1.118,1.164,1.22,1.286,1.364,1.454,1.555,1.67,1.797,1.936,2.089,2.254,2.431,2.621,2.822,3.035,3.259,3.494,3.74,3.995,4.259,4.532,4.813,5.102,5.399,5.702,6.011,6.327,6.648,6.974,7.304,7.639,7.978,8.32,8.666,9.014,9.366,9.719,10.08,10.43,10.79,11.15,11.52,11.88,12.24,12.61,12.97,13.34,13.71,14.08,14.44,14.81,15.18,15.55,15.92,16.28,16.65,17.02,17.39,17.76,18.12,18.49,18.86,19.22,19.59,19.95,20.32,20.68,21.05,21.41,21.77,22.14,22.5,22.86,23.22,23.58,23.94,24.3,24.66,25.02,25.38,25.74,26.09,26.45,26.81,27.16,27.52,27.87,28.23,28.58,28.93]; var LRNEG_A=[0.6029,0.5081,0.4425,0.3956,0.3615,0.3367,0.319,0.3067,0.2988,0.2944,0.293,0.2942,0.2974,0.3024,0.3089,0.3167,0.3256,0.3354,0.346,0.3573,0.369,0.3812,0.3937,0.4064,0.4193,0.4323,0.4453,0.4583,0.4713,0.4841,0.4969,0.5094,0.5218,0.534,0.546,0.5577,0.5692,0.5804,0.5914,0.6021,0.6125,0.6227,0.6326,0.6422,0.6516,0.6607,0.6695,0.6781,0.6865,0.6945,0.7024,0.71,0.7174,0.7246,0.7315,0.7382,0.7448,0.7511,0.7572,0.7632,0.7689,0.7745,0.7799,0.7852,0.7903,0.7952,0.8,0.8046,0.8091,0.8135,0.8177,0.8218,0.8258,0.8297,0.8334,0.8371,0.8406,0.8441,0.8474,0.8506,0.8538,0.8569,0.8598,0.8627,0.8655,0.8683,0.8709,0.8735,0.876,0.8785,0.8808,0.8832,0.8854,0.8876,0.8897,0.8918];
+var LRPOS_P=[1.085,1.126,1.175,1.232,1.296,1.367,1.443,1.525,1.611,1.702,1.795,1.89,1.987,2.086,2.184,2.282,2.38,2.477,2.572,2.665,2.757,2.846,2.934,3.019,3.101,3.181,3.258,3.333,3.405,3.474,3.541,3.606,3.668,3.728,3.786,3.842,3.895,3.947,3.996,4.044,4.09,4.134,4.176,4.217,4.256,4.294,4.331,4.366,4.4,4.432,4.464,4.494,4.524,4.552,4.579,4.606,4.631,4.656,4.68,4.703,4.725,4.747,4.768,4.788,4.808,4.827,4.846,4.864,4.881,4.898,4.915,4.931,4.946,4.961,4.976,4.991,5.005,5.018,5.031,5.044,5.057,5.069,5.081,5.093,5.104,5.115,5.126,5.137,5.147,5.158,5.168,5.177,5.187,5.196,5.205,5.214]; var LRNEG_P=[0.2376,0.2438,0.252,0.262,0.2736,0.2867,0.301,0.3163,0.3326,0.3496,0.3672,0.3852,0.4035,0.4219,0.4403,0.4587,0.4769,0.4948,0.5125,0.5297,0.5465,0.5629,0.5788,0.5942,0.6091,0.6235,0.6373,0.6507,0.6635,0.6758,0.6876,0.699,0.7098,0.7203,0.7302,0.7398,0.749,0.7577,0.7661,0.7741,0.7818,0.7892,0.7962,0.803,0.8094,0.8156,0.8215,0.8272,0.8326,0.8378,0.8428,0.8476,0.8522,0.8567,0.8609,0.865,0.8689,0.8726,0.8762,0.8797,0.8831,0.8863,0.8894,0.8923,0.8952,0.898,0.9006,0.9032,0.9057,0.9081,0.9104,0.9126,0.9147,0.9168,0.9188,0.9208,0.9226,0.9244,0.9262,0.9279,0.9295,0.9311,0.9326,0.9341,0.9356,0.937,0.9383,0.9396,0.9409,0.9421,0.9433,0.9445,0.9456,0.9467,0.9478,0.9488];
+function lrCut(age,x){var i=Math.max(5,Math.min(100,x))-5,lo=Math.floor(i),hi=Math.min(95,Math.ceil(i)),f=i-lo,P=(age==='Children')?LRPOS_P:LRPOS_A,N=(age==='Children')?LRNEG_P:LRNEG_A;return {lp:P[lo]+(P[hi]-P[lo])*f,ln:N[lo]+(N[hi]-N[lo])*f};}
+function ppvAt(age,prev,x){var po=prev/(100-prev),lp=lrCut(age,x).lp;return 100*po*lp/(1+po*lp);}
+function npvAt(age,prev,x){var po=prev/(100-prev),ln=lrCut(age,x).ln;return 100/(1+po*ln);}
+function solveSeSp(age,x){var r=lrCut(age,x);var sp=(r.lp-1)/(r.lp-r.ln);var se=r.lp*(1-sp);return {se:Math.max(0,Math.min(1,se)),sp:Math.max(0,Math.min(1,sp))};}
+function buildFreq(age,prev,ro,ri,ics){
+  var LG=I[LANG]||I.en, p=prev;
+  var o=ro.na?{se:1,sp:0}:solveSeSp(age,ro.c);
+  var inb=ri.na?{se:0,sp:1}:solveSeSp(age,Math.max(5,ri.c-1));
+  var se1=o.se,sp1=o.sp,se2=Math.min(inb.se,se1),sp2=Math.max(inb.sp,sp1);
+  var raw=[
+    {k:'outOk',n:(100-p)*sp1,c:'#0f9d8a',l:LG.freqLabels[0]},
+    {k:'outMiss',n:p*(1-se1),c:'#c0392b',l:LG.freqLabels[1]},
+    {k:'grey',n:p*(se1-se2)+(100-p)*(sp2-sp1),c:'#c7d0d8',l:LG.freqLabels[2]},
+    {k:'inOk',n:p*se2,c:'#2f6fb0',l:LG.freqLabels[3]},
+    {k:'inFp',n:(100-p)*(1-sp2),c:'#e08a1f',l:LG.freqLabels[4]}
+  ];
+  raw.forEach(function(d){d.n=Math.max(0,d.n);});
+  var fl=raw.map(function(d){return Math.floor(d.n);});
+  var used=fl.reduce(function(a,b){return a+b;},0);
+  var rem=raw.map(function(d,i){return {i:i,r:d.n-fl[i]};}).sort(function(a,b){return b.r-a.r;});
+  var left=Math.max(0,100-used);
+  for(var j=0;j<left;j++){fl[rem[j%rem.length].i]++;}
+  raw.forEach(function(d,i){d.cnt=fl[i];});
+  var cells='';
+  raw.forEach(function(d){for(var i=0;i<d.cnt;i++){cells+='<span style="width:16px;height:16px;border-radius:3px;display:inline-block;background:'+d.c+';border:1px solid rgba(15,23,42,.06)"></span>';}});
+  var grid='<div style="display:grid;grid-template-columns:repeat(10,16px);gap:5px;flex:0 0 auto">'+cells+'</div>';
+  var legend='<div style="display:flex;flex-direction:column;gap:12px;font-size:14.5px;color:var(--txt);flex:1 1 240px;min-width:220px">';
+  raw.forEach(function(d){legend+='<div style="display:flex;align-items:center;gap:12px;opacity:'+(d.cnt?1:0.38)+'"><span style="width:18px;height:18px;border-radius:3px;flex:0 0 auto;display:inline-block;background:'+d.c+';border:1px solid rgba(15,23,42,.06)"></span><b style="font-variant-numeric:tabular-nums;font-size:19px;min-width:28px;text-align:right;color:'+(d.k==='outMiss'?'#c0392b':'var(--txt)')+'">'+d.cnt+'</b><span style="flex:1 1 auto;color:#1f2937;line-height:1.4">'+d.l+'</span></div>';});
+  legend+='</div>';
+  var note=ics?'<p style="font-size:12.5px;color:#b45309;margin:8px 0 0">'+LG.freqIcs+'</p>':'';
+  return '<div style="border:1px solid var(--bdr);border-radius:14px;padding:14px 16px;background:var(--bg2);margin-top:12px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.05)"><div style="font-weight:600;font-size:16px;color:var(--txt);letter-spacing:-.01em">'+LG.freqTitle+'</div><p style="font-size:14px;color:#475569;margin:5px 0 18px">'+LG.freqSub(p)+'</p><div style="display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap">'+grid+legend+'</div>'+note+'</div>';
+}
+
+var st={age:'Adults',prev:20,npv:0.90,ppv:0.80,miss:20,feno:null,ics:false};
+
+var LANG='en';
+function L(k){var v=(I[LANG]&&I[LANG][k]);return v!==undefined?v:I.en[k];}
+function applyStatic(){
+  var els=document.querySelectorAll('[data-i18n]');for(var a=0;a<els.length;a++){var v=L(els[a].getAttribute('data-i18n'));if(v!=null)els[a].textContent=v;}
+  var elh=document.querySelectorAll('[data-i18n-html]');for(var b=0;b<elh.length;b++){var w=L(elh[b].getAttribute('data-i18n-html'));if(w!=null)elh[b].innerHTML=w;}
+  document.getElementById('guide').innerHTML=(GUIDE[LANG]||GUIDE.en);
+  updateSpecChip();
+  document.documentElement.setAttribute('lang',LANG);
+}
+var I={
+ en:{
+  ppb:'ppb', notAch:'not achievable', noRuleOut:'no rule-out', noRuleIn:'no rule-in',
+  zoneOut:'rule-out zone', zoneIn:'rule-in zone', zoneGrey:'grey zone',
+  readoutOut:function(f,p,nv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneOut+'</div>Treating '+f+' ppb as the cut-off at '+p+'% pre-test probability, a <b>negative</b> bronchial provocation test is likely and asthma is unlikely (NPV <b>'+nv+'%</b>). This allows about <b>'+(100-nv)+'%</b> false negatives (100 − NPV), so clinical judgement is still necessary, particularly under ICS, where repeat testing may be warranted.<sup>1</sup>';},
+  readoutIn:function(f,p,pv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneIn+'</div>Treating '+f+' ppb as the cut-off at '+p+'% pre-test probability, a <b>positive</b> bronchial provocation test is likely and a diagnosis of asthma may be assumed (PPV <b>'+pv+'%</b>). This allows about <b>'+(100-pv)+'%</b> false positives (100 − PPV), so clinical judgement is still necessary.<sup>1</sup>';},
+  grOut:function(x){return 'the rule-out (<'+x+' ppb)';}, grIn:function(x){return 'the rule-in (≥'+x+' ppb)';},
+  grBtw:function(lo,hi){return 'This value lies between '+lo+' and '+hi+' cut-offs. ';},
+  readoutGrey:function(f,p,nv,pv,btw){return '<div class="h">FeNO '+f+' ppb · '+this.zoneGrey+'</div>'+btw+'Treating '+f+' ppb as the cut-off at '+p+'% pre-test probability gives NPV <b>'+nv+'%</b> and PPV <b>'+pv+'%</b>; it neither rules asthma out nor in, so a bronchial provocation test is most informative.<sup>1</sup>';},
+  dOutNa:'At this prevalence and confidence, a low FeNO cannot exclude airway hyperresponsiveness; confirm with a bronchial provocation test when below the rule-in.',
+  dOut:function(pct){return 'FeNO below the rule-out threshold: it is likely this patient would have a <b>negative</b> bronchial provocation test, and asthma is unlikely. This interpretation allows ~<b>'+pct+'%</b> false negatives (100 − NPV), so clinical judgement is still necessary, particularly if the patient is under ICS, in which case repeat testing may be warranted.';},
+  dInNaChild:'In children, no FeNO threshold rules in below ~40% pre-test probability.',
+  dInNaAdult:function(pp){return 'No FeNO is specific enough at this prevalence to rule in at PPV ≥'+pp+'%.';},
+  dIn:function(pct){return 'FeNO above the rule-in threshold: it is likely this patient would have a <b>positive</b> bronchial provocation test (airway hyperresponsiveness), and a diagnosis of asthma may be assumed. This interpretation allows ~<b>'+pct+'%</b> false positives (100 − PPV), so clinical judgement is still necessary.';},
+  dW:'Neither rule-out nor rule-in applies; a bronchial provocation test is most informative.',
+  interpChildT:'Children', interpChildB:'FeNO is not a standalone primary-care test in children; acceptable rule-in performance appears only above ~40% pre-test probability.',
+  presetSpec:'Specialist care',
+  freqTitle:'How these thresholds sort 100 patients', freqSub:function(p){return 'Each square is one patient at a '+p+'% pre-test probability with the chosen thresholds.';},
+  freqLabels:['True negative: patient correctly predicted without airway hyperresponsiveness','False negative: missed patient with airway hyperresponsiveness','Grey zone → provocation test','True positive: patient correctly predicted with airway hyperresponsiveness','False positive: missed patient without airway hyperresponsiveness'],
+  freqIcs:'On ICS, FeNO is suppressed, so the true number of missed cases is likely higher than shown here.',
+  eyebrow:'Clinical decision aid', title:'FeNO Interpretation Tool',
+  banner:'Built from a meta-analysis of 30 studies and a single-centre prospective validation in adults (Roy MA, Gronnier M, et al. <i>The Lancet Respiratory Medicine</i>, 2026).',
+  tabCalc:'Calculator', tabGuide:'Guide & evidence',
+  lblAge:'Age group', optAdults:'Adults', optChildren:'Children', lblFeno:'Patient FeNO (ppb)',
+  lblIcs:'On inhaled corticosteroids', optNo:'No', optYes:'Yes',
+  lblNpv:'Rule-out NPV ≥', lblPpv:'Rule-in PPV ≥', lblMiss:'Missed diagnoses with rule-out ≤',
+  starNote:'<b>★ Suggested operating thresholds:</b> rule-in at PPV ≥80%; rule-out at NPV ≥90% with no more than ~20% missed (sensitivity ≥80%).<sup>1</sup>',
+  lblPrev:'Pre-test probability', presetPrimary:'Primary care ~20%', presetReported:'Patient-reported physician-diagnosed asthma ~67%',
+  cardOut:'Rule-out', cardGrey:'Grey zone', cardIn:'Rule-in',
+  icsWarnTitle:'⚠ Less reliable in patients on inhaled corticosteroids',
+  icsWarnBody:'Inhaled corticosteroids suppress FeNO; as such, a low value in a treated patient may not exclude asthma. Test or re-test FeNO after withholding ICS ≥2 weeks for best diagnostic accuracy, as the above thresholds mostly apply in those circumstances as well as in ICS-naïve patients.<sup>1,2</sup>',
+  btnPng:'Download chart (PNG)', btnPrint:'Print / Save PDF',
+  acronyms:'<b>PPV</b> = positive predictive value; <b>NPV</b> = negative predictive value.'
+ },
+ fr:{
+  ppb:'ppb', notAch:'non atteignable', noRuleOut:'pas d’exclusion', noRuleIn:'pas de confirmation',
+  zoneOut:'zone d’exclusion', zoneIn:'zone de confirmation', zoneGrey:'zone grise',
+  readoutOut:function(f,p,nv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneOut+'</div>En prenant '+f+' ppb comme seuil à une probabilité prétest de '+p+' %, un test de provocation bronchique <b>négatif</b> est probable et l’asthme peu probable (VPN <b>'+nv+' %</b>). Cela admet environ <b>'+(100-nv)+' %</b> de faux négatifs (100 − VPN) ; le jugement clinique reste nécessaire, en particulier sous CSI, où un nouveau test peut être justifié.<sup>1</sup>';},
+  readoutIn:function(f,p,pv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneIn+'</div>En prenant '+f+' ppb comme seuil à une probabilité prétest de '+p+' %, un test de provocation bronchique <b>positif</b> est probable (hyperréactivité bronchique) et un diagnostic d’asthme peut être présumé (VPP <b>'+pv+' %</b>). Cela admet environ <b>'+(100-pv)+' %</b> de faux positifs (100 − VPP) ; le jugement clinique reste nécessaire.<sup>1</sup>';},
+  grOut:function(x){return 'l’exclusion (<'+x+' ppb)';}, grIn:function(x){return 'la confirmation (≥'+x+' ppb)';},
+  grBtw:function(lo,hi){return 'Cette valeur se situe entre '+lo+' et '+hi+'. ';},
+  readoutGrey:function(f,p,nv,pv,btw){return '<div class="h">FeNO '+f+' ppb · '+this.zoneGrey+'</div>'+btw+'En prenant '+f+' ppb comme seuil à une probabilité prétest de '+p+' %, la VPN est de <b>'+nv+' %</b> et la VPP de <b>'+pv+' %</b> ; cette valeur n’exclut ni ne confirme l’asthme, un test de provocation bronchique est donc le plus informatif.<sup>1</sup>';},
+  dOutNa:'À cette prévalence et à ce niveau de confiance, un FeNO bas ne peut exclure l’hyperréactivité bronchique ; confirmez par un test de provocation bronchique lorsque la valeur est sous le seuil de confirmation.',
+  dOut:function(pct){return 'Un patient dont le FeNO est sous le seuil d’exclusion aurait vraisemblablement un test de provocation bronchique <b>négatif</b> ; l’asthme est donc peu probable. Cette approche comporte toutefois un taux de faux négatifs d’environ <b>'+pct+' %</b> (100 − VPN) : le jugement clinique reste nécessaire, en particulier si le patient est sous CSI.';},
+  dInNaChild:'Chez l’enfant, aucun seuil de FeNO ne permet la confirmation en dessous d’une probabilité prétest de ~40 %.',
+  dInNaAdult:function(pp){return 'Aucun FeNO n’est assez spécifique à cette prévalence pour confirmer à VPP ≥'+pp+' %.';},
+  dIn:function(pct){return 'Un patient dont le FeNO est au-dessus du seuil de confirmation aurait vraisemblablement un test de provocation bronchique <b>positif</b> (hyperréactivité bronchique) ; un diagnostic d’asthme peut donc être présumé. Cette approche comporte toutefois un taux de faux positifs d’environ <b>'+pct+' %</b> (100 − VPP) : le jugement clinique reste nécessaire.';},
+  dW:'Un test de provocation bronchique est indiqué, puisque ni le seuil d’exclusion ni celui de confirmation ne s’appliquent.',
+  interpChildT:'Enfants', interpChildB:'Le FeNO n’est pas un test autonome en première ligne chez l’enfant ; une performance de confirmation acceptable n’apparaît qu’au-dessus d’une probabilité prétest de ~40 %.',
+  presetSpec:'Clinique spécialisée',
+  freqTitle:'Comment cette approche trie 100 patients', freqSub:function(p){return 'Chaque carré représente un patient à une probabilité prétest de '+p+' %, avec les seuils choisis.';},
+  freqLabels:['Vrai négatif : patient correctement prédit sans hyperréactivité bronchique','Faux négatif : patient manqué avec hyperréactivité bronchique','Zone grise → test de provocation','Vrai positif : patient correctement prédit avec hyperréactivité bronchique','Faux positif : patient manqué sans hyperréactivité bronchique'],
+  freqIcs:'Sous CSI, le FeNO est abaissé ; le nombre réel de cas manqués est donc probablement plus élevé que celui indiqué ici.',
+  eyebrow:'Aide à la décision clinique', title:'Outil d’interprétation du FeNO',
+  banner:'Élaboré à partir d’une méta-analyse de 30 études, validée dans une cohorte prospective monocentrique (Roy MA, Gronnier M, et al. <i>The Lancet Respiratory Medicine</i>, 2026).',
+  tabCalc:'Calculateur', tabGuide:'Guide et données',
+  lblAge:'Groupe d’âge', optAdults:'Adultes', optChildren:'Enfants', lblFeno:'FeNO (ppb)',
+  lblIcs:'Sous corticoïdes inhalés', optNo:'Non', optYes:'Oui',
+  lblNpv:'VPN du seuil d’exclusion ≥', lblPpv:'VPP du seuil de confirmation ≥', lblMiss:'Diagnostics manqués',
+  starNote:'<b>★ Seuils opérationnels suggérés :</b> VPP ≥80 % et VPN ≥90 % avec au plus ~20 % de cas manqués (sensibilité ≥80 %).<sup>1</sup>',
+  lblPrev:'Probabilité prétest', presetPrimary:'Soins de première ligne ~20 %', presetReported:'Diagnostic clinique d’asthme par un médecin ~67 %',
+  cardOut:'Exclusion', cardGrey:'Zone grise', cardIn:'Confirmation',
+  icsWarnTitle:'⚠ Moins fiable chez les patients sous corticoïdes inhalés',
+  icsWarnBody:'Les corticoïdes inhalés abaissent le FeNO ; ainsi, une valeur basse chez un patient traité peut ne pas exclure l’asthme. Mesurez ou remesurez le FeNO après un arrêt des CSI ≥2 semaines pour une précision diagnostique optimale, car les seuils ci-dessus s’appliquent surtout dans ces circonstances ainsi que chez les patients naïfs de CSI.<sup>1,2</sup>',
+  btnPng:'Télécharger le graphique (PNG)', btnPrint:'Imprimer / Enregistrer en PDF',
+  acronyms:'<b>VPP</b> = valeur prédictive positive ; <b>VPN</b> = valeur prédictive négative.'
+ },
+ es:{
+  ppb:'ppb', notAch:'no alcanzable', noRuleOut:'sin exclusión', noRuleIn:'sin confirmación',
+  zoneOut:'zona de exclusión', zoneIn:'zona de confirmación', zoneGrey:'zona gris',
+  readoutOut:function(f,p,nv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneOut+'</div>Tomando '+f+' ppb como umbral con una probabilidad pretest del '+p+' %, es probable una prueba de provocación bronquial <b>negativa</b> y el asma es poco probable (VPN <b>'+nv+' %</b>). Esto admite alrededor del <b>'+(100-nv)+' %</b> de falsos negativos (100 − VPN); el juicio clínico sigue siendo necesario, en particular con CI, donde puede justificarse repetir la prueba.<sup>1</sup>';},
+  readoutIn:function(f,p,pv){return '<div class="h">FeNO '+f+' ppb · '+this.zoneIn+'</div>Tomando '+f+' ppb como umbral con una probabilidad pretest del '+p+' %, es probable una prueba de provocación bronquial <b>positiva</b> (hiperreactividad bronquial) y puede presumirse un diagnóstico de asma (VPP <b>'+pv+' %</b>). Esto admite alrededor del <b>'+(100-pv)+' %</b> de falsos positivos (100 − VPP); el juicio clínico sigue siendo necesario.<sup>1</sup>';},
+  grOut:function(x){return 'la exclusión (<'+x+' ppb)';}, grIn:function(x){return 'la confirmación (≥'+x+' ppb)';},
+  grBtw:function(lo,hi){return 'Este valor se sitúa entre '+lo+' y '+hi+'. ';},
+  readoutGrey:function(f,p,nv,pv,btw){return '<div class="h">FeNO '+f+' ppb · '+this.zoneGrey+'</div>'+btw+'Tomando '+f+' ppb como umbral con una probabilidad pretest del '+p+' %, la VPN es del <b>'+nv+' %</b> y la VPP del <b>'+pv+' %</b>; este valor no excluye ni confirma el asma, por lo que una prueba de provocación bronquial es lo más informativo.<sup>1</sup>';},
+  dOutNa:'A esta prevalencia y nivel de confianza, un FeNO bajo no puede excluir la hiperreactividad bronquial; confirme con una prueba de provocación bronquial cuando el valor esté por debajo del umbral de confirmación.',
+  dOut:function(pct){return 'Un paciente cuyo FeNO está por debajo del umbral de exclusión tendría, con toda probabilidad, una prueba de provocación bronquial <b>negativa</b>; por tanto, el asma es poco probable. No obstante, esta estrategia conlleva una tasa de falsos negativos de aproximadamente <b>'+pct+' %</b> (100 − VPN): el juicio clínico sigue siendo necesario, en particular si el paciente está con CI.';},
+  dInNaChild:'En niños, ningún umbral de FeNO permite la confirmación por debajo de una probabilidad pretest de ~40 %.',
+  dInNaAdult:function(pp){return 'Ningún FeNO es lo bastante específico a esta prevalencia para confirmar con VPP ≥'+pp+' %.';},
+  dIn:function(pct){return 'Un paciente cuyo FeNO está por encima del umbral de confirmación tendría, con toda probabilidad, una prueba de provocación bronquial <b>positiva</b> (hiperreactividad bronquial); por tanto, puede presumirse un diagnóstico de asma. No obstante, esta estrategia conlleva una tasa de falsos positivos de aproximadamente <b>'+pct+' %</b> (100 − VPP): el juicio clínico sigue siendo necesario.';},
+  dW:'Se indica una prueba de provocación bronquial, ya que no se aplica ni el umbral de exclusión ni el de confirmación.',
+  interpChildT:'Niños', interpChildB:'El FeNO no es una prueba autónoma de atención primaria en niños; un rendimiento de confirmación aceptable solo aparece por encima de una probabilidad pretest de ~40 %.',
+  presetSpec:'Clínica especializada',
+  freqTitle:'Cómo esta estrategia clasifica a 100 pacientes', freqSub:function(p){return 'Cada cuadrado es un paciente con una probabilidad pretest del '+p+' %, con los umbrales elegidos.';},
+  freqLabels:['Verdadero negativo: paciente correctamente predicho sin hiperreactividad bronquial','Falso negativo: paciente omitido con hiperreactividad bronquial','Zona gris → prueba de provocación','Verdadero positivo: paciente correctamente predicho con hiperreactividad bronquial','Falso positivo: paciente omitido sin hiperreactividad bronquial'],
+  freqIcs:'Con CI, el FeNO está reducido; por tanto, el número real de casos omitidos es probablemente mayor que el mostrado aquí.',
+  eyebrow:'Ayuda a la decisión clínica', title:'Herramienta de interpretación de FeNO',
+  banner:'Elaborada a partir de un metanálisis de 30 estudios, validada en una cohorte prospectiva unicéntrica (Roy MA, Gronnier M, et al. <i>The Lancet Respiratory Medicine</i>, 2026).',
+  tabCalc:'Calculadora', tabGuide:'Guía y evidencia',
+  lblAge:'Grupo de edad', optAdults:'Adultos', optChildren:'Niños', lblFeno:'FeNO (ppb)',
+  lblIcs:'En corticoides inhalados', optNo:'No', optYes:'Sí',
+  lblNpv:'VPN del umbral de exclusión ≥', lblPpv:'VPP del umbral de confirmación ≥', lblMiss:'Diagnósticos omitidos',
+  starNote:'<b>★ Umbrales operativos sugeridos:</b> VPP ≥80 % y VPN ≥90 % con un máximo de ~20 % de casos omitidos (sensibilidad ≥80 %).<sup>1</sup>',
+  lblPrev:'Probabilidad pretest', presetPrimary:'Atención primaria ~20 %', presetReported:'Diagnóstico clínico de asma por un médico ~67 %',
+  cardOut:'Exclusión', cardGrey:'Zona gris', cardIn:'Confirmación',
+  icsWarnTitle:'⚠ Menos fiable en pacientes con corticoides inhalados',
+  icsWarnBody:'Los corticoides inhalados reducen el FeNO; por ello, un valor bajo en un paciente tratado puede no excluir el asma. Mida o repita el FeNO tras suspender los CI ≥2 semanas para una precisión diagnóstica óptima, ya que los umbrales anteriores se aplican sobre todo en esas circunstancias, así como en pacientes sin exposición previa a CI.<sup>1,2</sup>',
+  btnPng:'Descargar gráfico (PNG)', btnPrint:'Imprimir / Guardar PDF',
+  acronyms:'<b>VPP</b> = valor predictivo positivo; <b>VPN</b> = valor predictivo negativo.'
+ }
+};
+var GUIDE={};
+
+
+/* ---- theme ---- */
+function effDark(){return false;}
+function pal(){return effDark()
+  ? {txt:'#9aa3ad',bdr:'#3a3f45',out:'#173404',grey:'#2C2C2A',inn:'#412402',bg:'#121316',ink:'#e6e8eb'}
+  : {txt:'#5b6b7b',bdr:'#e6edf2',out:'#E3F4EC',grey:'#EEF3F7',inn:'#FBEEDD',bg:'#ffffff',ink:'#0f172a'};}
+
+/* ---- chart ---- */
+var AXMIN=5,AXMAX=250,W=820,H=130,mL=16,mR=16,barY=46,barH=35;
+function X(c){c=Math.max(AXMIN,Math.min(AXMAX,c));return mL+(Math.log(c)-Math.log(AXMIN))/(Math.log(AXMAX)-Math.log(AXMIN))*(W-mL-mR);}
+function draw(ro,ri,feno){
+  var P=pal();
+  var tout=ro.na?null:(ro.c+1), tin=ri.na?null:ri.c;
+  var lo=(tout==null)?AXMIN:Math.max(AXMIN,Math.min(AXMAX,tout));
+  var hi=(tin==null)?AXMAX:Math.max(AXMIN,Math.min(AXMAX,tin));
+  var s='<svg viewBox="0 -12 '+W+' '+(H+12)+'" width="100%" role="img" aria-label="FeNO axis showing rule-out, grey zone and rule-in for the chosen settings">';
+  s+='<rect x="0" y="-12" width="'+W+'" height="'+(H+12)+'" fill="'+P.bg+'"/>';
+  if(tout!=null) s+='<rect x="'+X(AXMIN)+'" y="'+barY+'" width="'+(X(lo)-X(AXMIN))+'" height="'+barH+'" fill="'+P.out+'"/>';
+  if(hi>lo) s+='<rect x="'+X(lo)+'" y="'+barY+'" width="'+(X(hi)-X(lo))+'" height="'+barH+'" fill="'+P.grey+'"/>';
+  if(tin!=null) s+='<rect x="'+X(hi)+'" y="'+barY+'" width="'+(X(AXMAX)-X(hi))+'" height="'+barH+'" fill="'+P.inn+'"/>';
+  s+='<rect x="'+X(AXMIN)+'" y="'+barY+'" width="'+(X(AXMAX)-X(AXMIN))+'" height="'+barH+'" fill="none" stroke="'+P.bdr+'"/>';
+  if(tout!=null&&(X(lo)-X(AXMIN))>56) s+='<text x="'+((X(AXMIN)+X(lo))/2)+'" y="'+(barY+20)+'" text-anchor="middle" font-size="11" fill="'+P.ink+'">rule-out</text>';
+  if(hi>lo&&(X(hi)-X(lo))>54) s+='<text x="'+((X(lo)+X(hi))/2)+'" y="'+(barY+20)+'" text-anchor="middle" font-size="11" fill="'+P.ink+'">grey zone</text>';
+  if(tin!=null&&(X(AXMAX)-X(hi))>50) s+='<text x="'+((X(hi)+X(AXMAX))/2)+'" y="'+(barY+20)+'" text-anchor="middle" font-size="11" fill="'+P.ink+'">rule-in</text>';
+  function flag(c,txt,col){var x=X(c);return '<line x1="'+x+'" y1="'+(barY-12)+'" x2="'+x+'" y2="'+(barY+barH)+'" stroke="'+col+'" stroke-width="2"/><text x="'+x+'" y="'+(barY-15)+'" text-anchor="middle" font-size="12" font-weight="600" fill="'+col+'">'+txt+'</text>';}
+  if(tout!=null) s+=flag(tout,(ro.extrap?'≈':'')+tout,'#5d8f1f');
+  if(tin!=null) s+=flag(tin,(ri.extrap?'≈':'')+tin,'#b3700f');
+  [5,10,20,30,50,65,100,150,250].forEach(function(t){s+='<text x="'+X(t)+'" y="'+(barY+barH+18)+'" text-anchor="middle" font-size="10" fill="'+P.ink+'">'+t+'</text>';});
+  s+='<text x="'+(W/2)+'" y="'+(H-14)+'" text-anchor="middle" font-size="11" fill="'+P.ink+'">FeNO (ppb, log scale)</text>';
+  if(feno!=null&&!isNaN(feno)&&feno>0){
+    var fx=X(feno), gx=Math.max(mL+70,Math.min(W-mR-70,fx)), gy=18, pA=Math.round(ppvAt(st.age,st.prev,feno)), nA=Math.round(npvAt(st.age,st.prev,feno)), gC="#5d8f1f", aC="#b3700f", lbl=(!ro.na&&feno<=ro.c)?('<tspan fill="'+gC+'">← NPV '+nA+'%</tspan>'):((!ri.na&&feno>=ri.c)?('<tspan fill="'+aC+'">PPV '+pA+'% →</tspan>'):('<tspan fill="'+gC+'">← NPV '+nA+'%</tspan><tspan fill="'+P.txt+'"> · </tspan><tspan fill="'+aC+'">PPV '+pA+'% →</tspan>'));
+    s+='<line x1="'+fx+'" y1="'+(barY-7)+'" x2="'+fx+'" y2="'+(barY+barH+3)+'" stroke="'+P.ink+'" stroke-width="1.5"/>';
+    s+='<line x1="'+gx+'" y1="'+(gy+7)+'" x2="'+fx+'" y2="'+(barY-7)+'" stroke="'+P.ink+'" stroke-width="0.8"/>';
+    s+='<text x="'+gx+'" y="'+(gy-9)+'" text-anchor="middle" font-size="11" font-weight="700">'+lbl+'</text>';
+    s+='<line x1="'+(gx-3)+'" y1="'+(gy-1.6)+'" x2="'+(gx+3)+'" y2="'+(gy-1.6)+'" stroke="#7c8a99" stroke-width="1"/>';
+    s+='<line x1="'+(gx-3)+'" y1="'+(gy+1.6)+'" x2="'+(gx+3)+'" y2="'+(gy+1.6)+'" stroke="#7c8a99" stroke-width="1"/>';
+    s+='<circle cx="'+(gx-8)+'" cy="'+gy+'" r="6.5" fill="#22c55e"/>';
+    s+='<circle cx="'+(gx+8)+'" cy="'+gy+'" r="6.5" fill="#06b6d4"/>';
+    s+='<text x="'+(gx-8)+'" y="'+(gy+3)+'" text-anchor="middle" font-size="8" font-weight="700" fill="#ffffff">N</text>';
+    s+='<text x="'+(gx+8)+'" y="'+(gy+3)+'" text-anchor="middle" font-size="8" font-weight="700" fill="#ffffff">O</text>';
+  }
+  return s+'</svg>';
+}
+
+function blk(cls,head,body){return '<div class="blk '+cls+'"><div class="h">'+head+'</div>'+body+'</div>';}
+
+function render(){
+  var ro=ruleOut(st.age,st.prev,st.npv,st.miss), ri=ruleIn(st.age,st.prev,st.ppv);
+  document.getElementById('bar').innerHTML=draw(ro,ri,st.feno);
+  var pN=Math.round(st.npv*100), pP=Math.round(st.ppv*100);
+  var LG=I[LANG]||I.en, PPB=LG.ppb;
+  var fOut=document.getElementById('ahrOut');
+  if(st.feno!=null&&!isNaN(st.feno)&&st.feno>0){var inOut=(!ro.na&&st.feno<=ro.c),inIn=(!ri.na&&st.feno>=ri.c),nvX=Math.round(npvAt(st.age,st.prev,st.feno)),pvX=Math.round(ppvAt(st.age,st.prev,st.feno)),body;
+    if(inOut){body=LG.readoutOut(st.feno,st.prev,nvX);}
+    else if(inIn){body=LG.readoutIn(st.feno,st.prev,pvX);}
+    else{var lo=ro.na?'':LG.grOut(ro.c+1),hi=ri.na?'':LG.grIn(ri.c),btw=(lo&&hi)?LG.grBtw(lo,hi):'';body=LG.readoutGrey(st.feno,st.prev,nvX,pvX,btw);}
+    fOut.style.display='block';fOut.innerHTML=body;document.getElementById('cards').style.display='none';}else{fOut.style.display='none';document.getElementById('cards').style.display='flex';}
+
+  document.getElementById('cOut').textContent=ro.na?LG.notAch:((ro.extrap?'≈ ':'')+'< '+(ro.c+1)+' '+PPB);
+  document.getElementById('cIn').textContent =ri.na?LG.notAch:((ri.extrap?'≈ ':'')+'≥ '+ri.c+' '+PPB);
+  document.getElementById('cW').textContent=(!ro.na&&!ri.na&&ri.c>ro.c+1)?((ro.c+1)+'–'+(ri.c-1)+' '+PPB):(ro.na&&!ri.na?LG.noRuleOut:(!ro.na&&ri.na?LG.noRuleIn:'–'));
+
+  document.getElementById('dOut').innerHTML = ro.na ? LG.dOutNa : LG.dOut(100-Math.round(npvAt(st.age,st.prev,ro.c)));
+  document.getElementById('dIn').innerHTML = ri.na ? (st.age==='Children'?LG.dInNaChild:LG.dInNaAdult(pP)) : LG.dIn(100-Math.round(ppvAt(st.age,st.prev,ri.c)));
+  document.getElementById('dW').innerHTML = LG.dW;
+  document.getElementById('interp').innerHTML = (st.age==='Children') ? blk('grey',LG.interpChildT,LG.interpChildB) : '';
+  document.getElementById('icsWarn').style.display = st.ics ? 'block' : 'none';
+  document.getElementById('freq').innerHTML = buildFreq(st.age,st.prev,ro,ri,st.ics);
+  // sync presets
+  Array.prototype.forEach.call(document.querySelectorAll('#presets button'),function(b){b.classList.toggle('on',+b.dataset.v===st.prev);});
+}
+
+/* ---- PNG export (self-contained SVG → canvas) ---- */
+function exportPng(){
+  var svg=document.querySelector('#bar svg'); if(!svg) return;
+  var xml=new XMLSerializer().serializeToString(svg);
+  var url='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(xml)));
+  var img=new Image();
+  img.onload=function(){
+    var sc=2,c=document.createElement('canvas');
+    c.width=W*sc;c.height=H*sc;var ctx=c.getContext('2d');
+    ctx.fillStyle=pal().bg;ctx.fillRect(0,0,c.width,c.height);
+    ctx.setTransform(sc,0,0,sc,0,0);ctx.drawImage(img,0,0,W,H);
+    var a=document.createElement('a');a.download='feno_scenario_'+st.age.toLowerCase()+'_'+st.prev+'pct.png';
+    a.href=c.toDataURL('image/png');a.click();
+  };
+  img.src=url;
+}
+
+/* ---- tabs ---- */
+function showTab(t){
+  document.getElementById('exp').classList.toggle('hidden',t!=='exp');
+  document.getElementById('guide').classList.toggle('hidden',t!=='guide');
+  document.getElementById('tabExp').classList.toggle('on',t==='exp');
+  document.getElementById('tabGuide').classList.toggle('on',t==='guide');
+}
+
+/* ---- wiring ---- */
+function seg(id,key,fn){document.getElementById(id).addEventListener('click',function(e){if(!e.target.dataset.v)return;Array.prototype.forEach.call(this.children,function(b){b.classList.toggle('on',b===e.target);});st[key]=fn(e.target.dataset.v);render();});}
+function specVal(){return st.age==='Children'?56:40;}
+function setPrev(v){st.prev=v;document.getElementById('prev').value=v;document.getElementById('prevOut').textContent=v+'%';}
+function updateSpecChip(){var c=document.getElementById('presetSpec');if(c){c.dataset.v=specVal();c.textContent=L('presetSpec')+' ~'+specVal()+'%';}}
+document.getElementById('age').addEventListener('click',function(e){
+  if(!e.target.dataset.v)return;
+  Array.prototype.forEach.call(this.children,function(b){b.classList.toggle('on',b===e.target);});
+  var wasSpec=(st.prev===specVal());
+  st.age=e.target.dataset.v;
+  updateSpecChip();
+  if(wasSpec)setPrev(specVal());
+  render();
+});
+seg('npv','npv',function(v){return +v/100;});
+seg('miss','miss',function(v){return +v;});
+seg('ppv','ppv',function(v){return +v/100;});
+seg('ics','ics',function(v){return v==='Yes';});
+document.getElementById('prev').addEventListener('input',function(){st.prev=+this.value;document.getElementById('prevOut').textContent=this.value+'%';render();});
+Array.prototype.forEach.call(document.querySelectorAll('#presets button'),function(b){b.addEventListener('click',function(){st.prev=+b.dataset.v;document.getElementById('prev').value=st.prev;document.getElementById('prevOut').textContent=st.prev+'%';render();});});
+document.getElementById('feno').addEventListener('input',function(){var v=this.value;st.feno=(v===''||isNaN(+v))?null:+v;render();});
+
+render();
+
+GUIDE.fr = `<h2>Comment lire cet outil</h2>
+<p>Sélectionnez le groupe d’âge et réglez la probabilité prétest estimée dans le contexte du patient. L’outil tente de générer un seuil d’exclusion et un seuil de confirmation, qui délimitent trois zones :</p>
+<ul style="margin:8px 0;padding-left:20px">
+  <li style="margin:5px 0"><b>Sous le seuil d’exclusion</b> (FeNO &lt; exclusion) : l’hyperréactivité bronchique est peu probable, et l’asthme peut être exclu sans test de provocation bronchique.</li>
+  <li style="margin:5px 0"><b>Au-dessus du seuil de confirmation</b> (FeNO ≥ confirmation) : un test de provocation bronchique serait vraisemblablement positif.</li>
+  <li style="margin:5px 0"><b>Entre les deux</b> : zone grise, où aucune règle ne s’applique et où un test de provocation bronchique est le plus utile.</li>
+</ul>
+<h3>Choisir la probabilité prétest</h3>
+<p class="kv">Idéalement, la probabilité prétest devrait refléter votre réalité clinique, afin de mieux guider l’usage de cet outil dans votre milieu. Les estimations fournies ici proviennent de notre population locale en centre tertiaire et de la prévalence moyenne de l’asthme dans les études de notre méta-analyse (première ligne ~20 % ; clinique spécialisée ~40 % chez l’adulte, ~56 % chez l’enfant). Nous avons aussi ajouté la probabilité prétest d’un patient portant un ancien diagnostic clinique d’asthme jamais confirmé par un test objectif (~67 %).<sup>1</sup> Choisissez le contexte le plus proche de votre patient, ou définissez le vôtre à l’aide du curseur.</p>
+<h3>Choisir les seuils de VPN et de VPP</h3>
+<p class="kv">Les paramètres suggérés pour générer les seuils sont une VPP ≥80 % pour confirmer le diagnostic, et une VPN ≥90 % combinée à une sensibilité ≥80 % pour l’exclure.<sup>1</sup> Les critères d’exclusion sont plus stricts, car un diagnostic manqué comporte plus de risque qu’un surdiagnostic : un patient dont l’asthme n’est pas diagnostiqué reste exposé, à long terme, aux exacerbations et aux complications d’un asthme non traité, tandis qu’un résultat faussement positif expose surtout à un traitement antiasthmatique inutile. Cela suit la logique même du test de provocation bronchique, dont les seuils privilégient une sensibilité et une VPN élevées, de sorte qu’un test négatif exclue l’asthme de façon fiable.<sup>3</sup></p>
+<h3>Interprétation et usage</h3>
+<p class="kv">Les trois zones (exclusion, zone grise et confirmation) traduisent la façon dont les seuils choisis classeraient un patient. La zone grise s’élargit à mesure que l’on exige des seuils plus stricts, et à certaines prévalences un seuil de confirmation ou d’exclusion n’est pas atteignable (par exemple, pas d’exclusion à prévalence élevée, ni de confirmation à faible prévalence chez l’enfant).</p>
+<h3>Une approche multimodale</h3>
+<p>Les biomarqueurs s’interprètent idéalement dans le contexte clinique, plutôt qu’isolément. La probabilité prétest augmente avec les éléments cliniques évocateurs d’asthme ; par exemple, Schneider et al. ont diagnostiqué l’asthme en première ligne avec un haut degré de certitude en associant rhinite allergique, sibilances et FeNO &gt; 33 ppb. Un outil intégrant de multiples variables pour affiner la probabilité prétest demeure une priorité de recherche, afin de personnaliser la démarche diagnostique à chaque patient.</p>
+<h2>Limites</h2>
+<details><summary>1 · Les CSI abaissent le FeNO</summary><div class="body">Les corticoïdes inhalés (CSI) abaissent le FeNO ; une valeur basse chez un patient traité peut donc être un faux négatif. Ces seuils ont surtout été établis chez des patients naïfs de CSI : dans DIVE, une exclusion à ≤30 ppb conservait une VPN de 98 % chez les patients naïfs de CSI, contre 88 % sous CSI. Lorsque c’est possible, mesurez le FeNO avant l’instauration des CSI ou après au moins deux semaines d’arrêt, le monoxyde d’azote expiré pouvant rester abaissé environ 18 jours.<sup>1,2</sup></div></details>
+<details><summary>2 · Exclusions manquées (faux négatifs)</summary><div class="body">Une exclusion classe à tort une fraction de patients égale à <b>1 − VPN</b> : environ 7 % pour l’exclusion de l’adulte (&lt; 20 ppb) et ~8 % chez l’enfant (&lt; 15 ppb) à une probabilité prétest de 20 %, et moins lorsque la VPN exigée est plus élevée. C’est peu au regard du test de provocation bronchique (&lt; 5 %), mais un faux négatif pèse plus lourd qu’un faux positif, car il laisse un patient à risque sans traitement. Devant une suspicion persistante malgré un FeNO bas, en particulier avec un phénotype d’asthme de type 2 bas, poursuivez les investigations.</div></details>
+<details><summary>3 · Confirmations manquées (faux positifs)</summary><div class="body">Une confirmation classe à tort une fraction de patients égale à <b>1 − VPP</b> (environ 20 % à la VPP suggérée de ≥80 %, et moins à VPP plus élevée). Un FeNO élevé n’est pas spécifique de l’asthme : une bronchite à éosinophiles, une atteinte sinonasale ou allergique, ou une hyperréactivité bronchique indirecte peuvent aussi l’élever. Comme une confirmation débouche sur un test de provocation confirmatoire, un faux positif porte à moindre conséquence qu’un diagnostic manqué.</div></details>
+<details><summary>4 · Enfants : pas un test autonome en première ligne</summary><div class="body">Chez l’enfant, aucun seuil de FeNO n’atteignait les critères de rapport de vraisemblance requis pour confirmer le diagnostic en dessous d’une probabilité prétest d’environ 40 % ; une performance de confirmation acceptable n’apparaît qu’en contexte spécialisé (prévalence plus élevée). L’outil désactive donc la confirmation là où elle n’est pas atteignable.</div></details>
+<details><summary>5 · Les éosinophiles sanguins ne sont pas inclus</summary><div class="body">La numération des éosinophiles sanguins était peu discriminante chez l’adulte (AUC ~0,65), n’apportait rien de plus que le FeNO et ne disposait d’aucune donnée pédiatrique ; elle n’est donc pas intégrée à cet outil.</div></details>
+<details><summary>6 · Facteurs de confusion non contrôlés</summary><div class="body">Le FeNO varie avec l’âge, la taille, l’origine ethnique, l’atopie, le tabagisme, la méthode de mesure, le moment de la journée et d’un jour à l’autre. Aucun de ces facteurs n’a pu être contrôlé dans la méta-analyse ; une valeur isolée doit être interprétée en conséquence.</div></details>
+<details><summary>7 · Le FeNO prédit l’hyperréactivité bronchique, pas l’asthme</summary><div class="body">La référence utilisée est le test de provocation bronchique (PD20/PC20). Le FeNO reflète l’inflammation bronchique de type 2 et prédit l’hyperréactivité bronchique ; le diagnostic d’asthme, lui, requiert l’ensemble du tableau clinique.</div></details>
+<details><summary>8 · Validation monocentrique et chez l’adulte</summary><div class="body">La validation prospective (DIVE) a été menée dans un seul centre, chez l’adulte, selon une filière d’orientation protocolisée. Une validation multicentrique et pédiatrique reste nécessaire, et la transposabilité à d’autres contextes peut être limitée.</div></details>
+<h2>Questions fréquentes</h2>
+<details><summary>Puis-je exclure l’asthme si mon patient est sous CSI ?</summary><div class="body">Avec prudence. Les CSI peuvent abaisser le FeNO, si bien qu’une valeur basse ne permet pas toujours d’exclure l’asthme. L’exclusion a été validée lors d’un bilan chez des patients non traités. Envisagez une mesure avant ou sans CSI, ou passez directement au test de provocation bronchique si la suspicion persiste.</div></details>
+<details><summary>Pourquoi le FeNO est-il élevé alors que le test de provocation est négatif ?</summary><div class="body">C’est attendu dans environ 20 % des cas (faux positifs) : une bronchite à éosinophiles, une atteinte sinonasale ou allergique, ou une hyperréactivité bronchique indirecte peuvent élever le FeNO alors que le test de provocation bronchique est négatif.</div></details>
+<details><summary>Le FeNO est bas mais je suspecte quand même un asthme</summary><div class="body">Environ 7 % des adultes exclus (et ~8 % des enfants) sont des faux négatifs, contre moins de 5 % pour un test de provocation bronchique. Si la suspicion clinique reste forte, en particulier avec un phénotype d’asthme de type 2 bas, poursuivez les investigations.</div></details>
+<details><summary>L’appareil ou le moment de la journée ont-ils une importance ?</summary><div class="body">Oui. Utilisez un appareil standardisé : les valeurs varient selon l’appareil, le moment de la journée, l’atopie, le tabagisme, la taille, l’origine ethnique et d’un jour à l’autre. Une mesure isolée doit être interprétée en gardant ces facteurs à l’esprit.</div></details>
+<h2>Les données en bref</h2>
+<p class="kv">Méta-analyse : 30 études, &gt;8 000 patients avec suspicion d’asthme et spirométrie normale. AUC du FeNO chez l’adulte <b>0,80</b> (k=22) ; chez l’enfant <b>0,75</b> (k=9).</p>
+<p class="kv">Validation prospective (DIVE, adultes, monocentrique) : n=123, prévalence de l’asthme 18 %, AUC du FeNO <b>0,77</b> (IC 95 % 0,65–0,89), avec une meilleure discrimination chez les patients naïfs de corticoïdes.</p>
+<h2>Source et références</h2>
+<p class="kv"><sup>1</sup> Roy MA, Gronnier M, et al. Accuracy of type-2 inflammatory biomarkers to predict airway hyperresponsiveness in adults and children with suspected asthma: a meta-analysis of 30 studies with prospective primary-care validation. <i>The Lancet Respiratory Medicine</i> (2026).</p>
+<p class="kv"><sup>2</sup> Bardsley G, Daley-Yates P, Baines A, et al. Anti-inflammatory duration of action of fluticasone furoate/vilanterol trifenatate in asthma: a cross-over randomised controlled trial. <i>Respir Res.</i> 2018;19:133. doi:10.1186/s12931-018-0836-6.</p>
+<p class="kv"><sup>3</sup> Cockcroft DW. Direct challenge tests: airway hyperresponsiveness in asthma: its measurement and clinical significance. <i>Chest.</i> 2010;138(2 Suppl):18S–24S. doi:10.1378/chest.10-0088.</p>
+<p class="kv">PROSPERO CRD42023489738 · ClinicalTrials.gov NCT05592519 · Code/données : github.com/boomlife4000/feno-asthma-diagnostic-meta-analysis</p>`;
+GUIDE.es = `<h2>Cómo leer esta herramienta</h2>
+<p>Seleccione el grupo de edad y ajuste la probabilidad pretest estimada en el contexto del paciente. La herramienta intenta generar un umbral de exclusión y un umbral de confirmación, que delimitan tres zonas:</p>
+<ul style="margin:8px 0;padding-left:20px">
+  <li style="margin:5px 0"><b>Por debajo del umbral de exclusión</b> (FeNO &lt; exclusión): la hiperreactividad bronquial es poco probable y el asma puede excluirse sin prueba de provocación bronquial.</li>
+  <li style="margin:5px 0"><b>Por encima del umbral de confirmación</b> (FeNO ≥ confirmación): una prueba de provocación bronquial sería probablemente positiva.</li>
+  <li style="margin:5px 0"><b>Entre ambos</b>: zona gris, donde no se aplica ninguna regla y donde una prueba de provocación bronquial es lo más útil.</li>
+</ul>
+<h3>Elegir la probabilidad pretest</h3>
+<p class="kv">Idealmente, la probabilidad pretest debería reflejar su realidad clínica, para orientar mejor el uso de esta herramienta en su medio. Las estimaciones aquí proporcionadas provienen de nuestra población local en un centro terciario y de la prevalencia media del asma en los estudios de nuestro metanálisis (atención primaria ~20 %; clínica especializada ~40 % en adultos, ~56 % en niños). También añadimos la probabilidad pretest de un paciente con un diagnóstico clínico previo de asma nunca confirmado mediante una prueba objetiva (~67 %).<sup>1</sup> Elija el contexto más cercano a su paciente, o defina el suyo con el control deslizante.</p>
+<h3>Elegir los umbrales de VPN y VPP</h3>
+<p class="kv">Los parámetros sugeridos para generar los umbrales son una VPP ≥80 % para confirmar el diagnóstico y una VPN ≥90 % combinada con una sensibilidad ≥80 % para excluirlo.<sup>1</sup> Los criterios de exclusión son más estrictos, porque un diagnóstico omitido conlleva más riesgo que un sobrediagnóstico: un paciente cuyo asma no se diagnostica queda expuesto, a largo plazo, a exacerbaciones y complicaciones de un asma no tratada, mientras que un resultado falsamente positivo expone sobre todo a un tratamiento antiasmático innecesario. Esto sigue la lógica misma de la prueba de provocación bronquial, cuyos umbrales privilegian una sensibilidad y una VPN elevadas, de modo que una prueba negativa excluya el asma de forma fiable.<sup>3</sup></p>
+<h3>Interpretación y uso</h3>
+<p class="kv">Las tres zonas (exclusión, zona gris y confirmación) reflejan cómo los umbrales elegidos clasificarían a un paciente. La zona gris se amplía a medida que se exigen umbrales más estrictos, y a ciertas prevalencias un umbral de confirmación o de exclusión no es alcanzable (por ejemplo, sin exclusión a prevalencia alta, ni confirmación a baja prevalencia en niños).</p>
+<h3>Un enfoque multimodal</h3>
+<p>Los biomarcadores se interpretan idealmente en el contexto clínico, y no de forma aislada. La probabilidad pretest aumenta con los elementos clínicos sugestivos de asma; por ejemplo, Schneider et al. diagnosticaron el asma en atención primaria con un alto grado de certeza al combinar rinitis alérgica, sibilancias y un FeNO &gt; 33 ppb. Una herramienta que integre múltiples variables para afinar la probabilidad pretest sigue siendo una prioridad de investigación, con el fin de personalizar el proceso diagnóstico para cada paciente.</p>
+<h2>Limitaciones</h2>
+<details><summary>1 · Los CI reducen el FeNO</summary><div class="body">Los corticoides inhalados (CI) reducen el FeNO; por ello, un valor bajo en un paciente tratado puede ser un falso negativo. Estos umbrales se establecieron sobre todo en pacientes sin exposición previa a CI: en DIVE, una exclusión a ≤30 ppb mantenía una VPN del 98 % en pacientes sin CI, frente al 88 % con CI. Cuando sea posible, mida el FeNO antes de iniciar los CI o tras al menos dos semanas de suspensión, ya que el óxido nítrico exhalado puede permanecer reducido durante unos 18 días.<sup>1,2</sup></div></details>
+<details><summary>2 · Exclusiones omitidas (falsos negativos)</summary><div class="body">Una exclusión clasifica erróneamente a una fracción de pacientes igual a <b>1 − VPN</b>: alrededor del 7 % en la exclusión del adulto (&lt; 20 ppb) y ~8 % en niños (&lt; 15 ppb) con una probabilidad pretest del 20 %, y menos cuando la VPN exigida es mayor. Es poco frente a la prueba de provocación bronquial (&lt; 5 %), pero un falso negativo pesa más que un falso positivo, porque deja sin tratamiento a un paciente en riesgo. Ante una sospecha persistente pese a un FeNO bajo, en particular con un fenotipo de asma de tipo 2 bajo, prosiga el estudio.</div></details>
+<details><summary>3 · Confirmaciones omitidas (falsos positivos)</summary><div class="body">Una confirmación clasifica erróneamente a una fracción de pacientes igual a <b>1 − VPP</b> (alrededor del 20 % con la VPP sugerida de ≥80 %, y menos a VPP mayor). Un FeNO elevado no es específico del asma: una bronquitis eosinofílica, una afectación sinonasal o alérgica, o una hiperreactividad bronquial indirecta también pueden elevarlo. Como una confirmación conduce a una prueba de provocación confirmatoria, un falso positivo tiene menos consecuencias que un diagnóstico omitido.</div></details>
+<details><summary>4 · Niños: no es una prueba autónoma de atención primaria</summary><div class="body">En niños, ningún umbral de FeNO alcanzaba los criterios de razón de verosimilitud necesarios para confirmar el diagnóstico por debajo de una probabilidad pretest de ~40 %; un rendimiento de confirmación aceptable solo aparece en un contexto especializado (prevalencia más alta). Por ello, la herramienta desactiva la confirmación donde no es alcanzable.</div></details>
+<details><summary>5 · Los eosinófilos en sangre no se incluyen</summary><div class="body">El recuento de eosinófilos en sangre fue poco discriminante en adultos (AUC ~0,65), no aportaba nada más allá del FeNO y no disponía de datos pediátricos; por ello no se integra en esta herramienta.</div></details>
+<details><summary>6 · Factores de confusión no controlados</summary><div class="body">El FeNO varía con la edad, la talla, el origen étnico, la atopia, el tabaquismo, el método de medición, el momento del día y de un día a otro. Ninguno de estos factores pudo controlarse en el metanálisis; un valor aislado debe interpretarse en consecuencia.</div></details>
+<details><summary>7 · El FeNO predice la hiperreactividad bronquial, no el asma</summary><div class="body">La referencia utilizada es la prueba de provocación bronquial (PD20/PC20). El FeNO refleja la inflamación bronquial de tipo 2 y predice la hiperreactividad bronquial; el diagnóstico de asma, en cambio, requiere el conjunto del cuadro clínico.</div></details>
+<details><summary>8 · Validación unicéntrica y en adultos</summary><div class="body">La validación prospectiva (DIVE) se realizó en un solo centro, en adultos, según una vía de derivación protocolizada. Se necesita una validación multicéntrica y pediátrica, y la transferibilidad a otros contextos puede ser limitada.</div></details>
+<h2>Preguntas frecuentes</h2>
+<details><summary>¿Puedo excluir el asma si mi paciente está con CI?</summary><div class="body">Con prudencia. Los CI pueden reducir el FeNO, de modo que un valor bajo no siempre permite excluir el asma. La exclusión se validó en un estudio de pacientes no tratados. Considere medir antes o sin CI, o pase directamente a la prueba de provocación bronquial si la sospecha persiste.</div></details>
+<details><summary>¿Por qué el FeNO está elevado si la prueba de provocación es negativa?</summary><div class="body">Es esperable en alrededor del 20 % de los casos (falsos positivos): una bronquitis eosinofílica, una afectación sinonasal o alérgica, o una hiperreactividad bronquial indirecta pueden elevar el FeNO cuando la prueba de provocación bronquial es negativa.</div></details>
+<details><summary>El FeNO es bajo pero sigo sospechando asma</summary><div class="body">Alrededor del 7 % de los adultos excluidos (y ~8 % de los niños) son falsos negativos, frente a menos del 5 % con una prueba de provocación bronquial. Si la sospecha clínica sigue siendo alta, en particular con un fenotipo de asma de tipo 2 bajo, prosiga el estudio.</div></details>
+<details><summary>¿Importa el dispositivo o el momento del día?</summary><div class="body">Sí. Utilice un dispositivo estandarizado: los valores varían según el dispositivo, el momento del día, la atopia, el tabaquismo, la talla, el origen étnico y de un día a otro. Una medición aislada debe interpretarse teniendo en cuenta estos factores.</div></details>
+<h2>Datos de un vistazo</h2>
+<p class="kv">Metanálisis: 30 estudios, &gt;8 000 pacientes con sospecha de asma y espirometría normal. AUC del FeNO en adultos <b>0,80</b> (k=22); en niños <b>0,75</b> (k=9).</p>
+<p class="kv">Validación prospectiva (DIVE, adultos, unicéntrica): n=123, prevalencia de asma 18 %, AUC del FeNO <b>0,77</b> (IC 95 % 0,65–0,89), con mejor discriminación en pacientes sin corticoides previos.</p>
+<h2>Fuente y referencias</h2>
+<p class="kv"><sup>1</sup> Roy MA, Gronnier M, et al. Accuracy of type-2 inflammatory biomarkers to predict airway hyperresponsiveness in adults and children with suspected asthma: a meta-analysis of 30 studies with prospective primary-care validation. <i>The Lancet Respiratory Medicine</i> (2026).</p>
+<p class="kv"><sup>2</sup> Bardsley G, Daley-Yates P, Baines A, et al. Anti-inflammatory duration of action of fluticasone furoate/vilanterol trifenatate in asthma: a cross-over randomised controlled trial. <i>Respir Res.</i> 2018;19:133. doi:10.1186/s12931-018-0836-6.</p>
+<p class="kv"><sup>3</sup> Cockcroft DW. Direct challenge tests: airway hyperresponsiveness in asthma: its measurement and clinical significance. <i>Chest.</i> 2010;138(2 Suppl):18S–24S. doi:10.1378/chest.10-0088.</p>
+<p class="kv">PROSPERO CRD42023489738 · ClinicalTrials.gov NCT05592519 · Código/datos: github.com/boomlife4000/feno-asthma-diagnostic-meta-analysis</p>`;
+GUIDE.en=document.getElementById('guide').innerHTML;
+document.getElementById('langsel').addEventListener('click',function(e){if(!e.target.dataset.l)return;LANG=e.target.dataset.l;Array.prototype.forEach.call(this.children,function(b){b.classList.toggle('on',b===e.target);});applyStatic();render();});
+applyStatic();
+
+</script>
+</body>
+</html>
