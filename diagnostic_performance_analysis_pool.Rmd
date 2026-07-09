@@ -1,0 +1,915 @@
+---
+title: "DIVE Study - Diagnostic Performance"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    code_folding: hide
+    number_sections: true
+    fig_width: 11
+    fig_height: 6
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; }
+h1, h2, h3 { color: #2E74B5; }
+.section-box {
+  background-color: #f0f6fc;
+  border-left: 4px solid #2E74B5;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+}
+table { font-size: 13px; }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE, fig.align="center")
+```
+
+# Data Loading and Packages
+
+```{r packages-data}
+library(dplyr)
+library(readxl)
+library(ROCit)
+library(ggplot2)
+library(scales)
+library(kableExtra)
+
+kable_styling <- kableExtra::kable_styling
+row_spec       <- kableExtra::row_spec
+scroll_box     <- kableExtra::scroll_box
+footnote       <- kableExtra::footnote
+
+# ── Import DIVE data ──────────────────────────────────────────────────────────
+df <- read_excel("2026_03_24_Dive_Analysis.xlsx")
+
+df <- df %>%
+  mutate(
+    # Outcome : Yes/No -> 1/0
+    pd20pos_200           = ifelse(pd20pos_200 == "Yes", 1L, 0L),
+    ea_feno_niox          = as.numeric(ea_feno_niox),
+    ea_fsc_eos_val        = as.numeric(ea_fsc_eos_val),
+    med_ics_any           = as.numeric(med_ics_any),
+    sex                   = as.numeric(sex),
+    race                  = as.numeric(race),
+    smoking_status        = as.numeric(smoking_status),
+    his_atopic            = as.numeric(his_atopic),
+    age                   = as.numeric(age),
+    height                = as.numeric(height),
+    acq5_moy              = as.numeric(acq5_moy),
+    fp_vems_obs_post_pour = as.numeric(fp_vems_obs_post_pour),
+    Time_to_FeNO          = as.numeric(Time_to_FeNO),
+    ACQ_OR_FEV1           = ifelse(ACQ_OR_FEV1 == "Yes", 1L, 0L),
+    # Derived variables
+    feno_lt30  = ifelse(is.na(ea_feno_niox), NA_real_, as.numeric(ea_feno_niox < 30)),
+    feno_gte65 = ifelse(is.na(ea_feno_niox), NA_real_, as.numeric(ea_feno_niox >= 65)),
+    feno_gt48  = ifelse(is.na(ea_feno_niox), NA_real_, as.numeric(ea_feno_niox > 48)),
+    eos_gt030  = ifelse(is.na(ea_fsc_eos_val), NA_real_, as.numeric(ea_fsc_eos_val > 0.30))
+  )
+
+# pd20pos_200 as character "Yes"/"No" for ROCit (same as DIVE compact)
+df$pd20pos_200_char <- ifelse(df$pd20pos_200 == 1, "Yes", "No")
+
+pop_totale   <- df
+pop_sans_ics <- df %>% filter(med_ics_any == 0)
+pop_avec_ics <- df %>% filter(med_ics_any == 1)
+
+REF             <- "pd20pos_200_char"   # character for ROCit
+REF_NUM         <- "pd20pos_200"        # numeric for table/stats
+COL_FENO        <- "#1b9e77"
+COL_EOS         <- "#d95f02"
+COL_INTERACTION <- "#7570b3"
+
+dir.create("figures_pdf", showWarnings = FALSE)
+```
+
+# Population Description
+
+```{r description-pop}
+data.frame(
+  Population = c("Total", "No ICS (med_ics_any = 0)", "With ICS (med_ics_any = 1)"),
+  N_total    = c(sum(!is.na(pop_totale[[REF_NUM]])),
+                 sum(!is.na(pop_sans_ics[[REF_NUM]])),
+                 sum(!is.na(pop_avec_ics[[REF_NUM]]))),
+  N_pos      = c(sum(pop_totale[[REF_NUM]] == 1, na.rm=TRUE),
+                 sum(pop_sans_ics[[REF_NUM]] == 1, na.rm=TRUE),
+                 sum(pop_avec_ics[[REF_NUM]] == 1, na.rm=TRUE)),
+  N_neg      = c(sum(pop_totale[[REF_NUM]] == 0, na.rm=TRUE),
+                 sum(pop_sans_ics[[REF_NUM]] == 0, na.rm=TRUE),
+                 sum(pop_avec_ics[[REF_NUM]] == 0, na.rm=TRUE))
+) %>%
+  mutate(Prevalence = round(N_pos / N_total * 100, 1)) %>%
+  kable(col.names = c("Population","N total","PD20 positive (<=200 ug)",
+                      "PD20 negative (>200 ug)","Prevalence (%)"),
+        align = "lcccc") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed","bordered"),
+                full_width = FALSE) %>%
+  row_spec(0, bold=TRUE, background="#2E74B5", color="white")
+```
+
+::: {.section-box}
+**Diagnostic reference:** pd20pos_200 = "Yes" (asthma positive)  
+**Asthma = pd20pos_200 = Yes. Non-asthma = pd20pos_200 = No.**
+:::
+
+---
+
+```{r table1-setup}
+# ── Variable metadata (variables available in DIVE) ───────────────────────────
+var_meta <- list(
+  age            = list(type="continuous",  label="Age (years)"),
+  height         = list(type="continuous",  label="Height (cm)"),
+  sex            = list(type="categorical", label="Sex",
+                        levels_labels=c("1"="Female","2"="Male")),
+  race           = list(type="categorical", label="Race/ethnicity",
+                        levels_labels=c("1"="White","3"="Chinese",
+                                        "7"="Latino","12"="Other")),
+  smoking_status = list(type="categorical", label="Smoking status",
+                        levels_labels=c("1"="Current smoker","2"="Never smoker",
+                                        "3"="Ex-smoker","4"="Passive smoker")),
+  his_atopic     = list(type="binary",      label="Atopic history"),
+  med_ics_any    = list(type="binary",      label="Any ICS"),
+  ACQ_OR_FEV1    = list(type="binary",      label="ACQ or FEV1 criteria met"),
+  acq5_moy       = list(type="continuous",  label="ACQ-5 mean score"),
+  fp_vems_obs_post_pour = list(type="continuous",
+                               label="Post-BD FEV1 (% predicted)"),
+  Time_to_FeNO   = list(type="continuous",  label="Time to FeNO (hours)"),
+  ea_feno_niox   = list(type="continuous",  label="FeNO (ppb)"),
+  feno_lt30      = list(type="binary",      label="FeNO < 30 ppb"),
+  feno_gte65     = list(type="binary",      label="FeNO >= 65 ppb"),
+  feno_gt48      = list(type="binary",      label="FeNO > 48 ppb"),
+  ea_fsc_eos_val = list(type="continuous",  label="Blood eosinophils (G/L)",
+                        decimals=2),
+  eos_gt030      = list(type="binary",      label="Eosinophils > 0.30 G/L"),
+  pd20pos_200    = list(type="binary",      label="PD20 positive (<=200 ug)")
+)
+
+# ── p-value formatter ──────────────────────────────────────────────────────────
+fmt_p <- function(p) {
+  if (is.na(p) || is.null(p)) return("")
+  if (p < 0.001) return("< 0.001")
+  if (p < 0.01)  return(sprintf("%.3f", p))
+  sprintf("%.3f", p)
+}
+
+# ── Core table-building function ───────────────────────────────────────────────
+build_table1 <- function(data, group_var, group_labels, parametric = TRUE) {
+
+  grp      <- data[[group_var]]
+  grp_lvls <- sort(unique(grp[!is.na(grp)]))
+  n_grp    <- sapply(grp_lvls, function(g) sum(grp == g, na.rm=TRUE))
+  n_total  <- sum(!is.na(grp))
+
+  col_total <- paste0("Total (N=", n_total, ")")
+  col_grps  <- sapply(seq_along(grp_lvls), function(i)
+    paste0(group_labels[i], " (N=", n_grp[i], ")"))
+  col_pval  <- "p-value"
+
+  rows <- list()
+
+  for (vname in names(var_meta)) {
+    meta <- var_meta[[vname]]
+    if (!vname %in% names(data)) next
+    x <- data[[vname]]
+    if (is.character(x)) x <- as.factor(x)
+
+    # ── Continuous ──────────────────────────────────────────────────────────
+    if (meta$type == "continuous") {
+      valid <- !is.na(x) & !is.na(grp)
+      x_v   <- as.numeric(x[valid])
+      grp_v <- grp[valid]
+
+      n_dec    <- if (!is.null(meta$decimals)) meta$decimals else 1
+      fmt_mean <- function(v) sprintf(
+        paste0("%.", n_dec, "f (%.", n_dec, "f)"),
+        mean(v, na.rm=TRUE), sd(v, na.rm=TRUE))
+      fmt_med  <- function(v) sprintf(
+        paste0("%.", n_dec, "f [%.", n_dec, "f - %.", n_dec, "f]"),
+        median(v, na.rm=TRUE),
+        quantile(v, 0.25, na.rm=TRUE),
+        quantile(v, 0.75, na.rm=TRUE))
+
+      grp_list <- lapply(grp_lvls, function(g) x_v[grp_v == g])
+      grp_list <- grp_list[sapply(grp_list, length) >= 2]
+
+      pval <- tryCatch({
+        if (length(grp_list) == 2) {
+          if (parametric) t.test(grp_list[[1]], grp_list[[2]])$p.value
+          else wilcox.test(grp_list[[1]], grp_list[[2]], exact=FALSE)$p.value
+        } else if (length(grp_list) > 2) {
+          if (parametric) summary(aov(x_v ~ factor(grp_v)))[[1]][["Pr(>F)"]][1]
+          else kruskal.test(x_v ~ factor(grp_v))$p.value
+        } else NA
+      }, error=function(e) NA)
+
+      hrow <- data.frame(Variable=meta$label, Total="", stringsAsFactors=FALSE)
+      for (i in seq_along(grp_lvls)) hrow[[col_grps[i]]] <- ""
+      hrow[[col_pval]] <- fmt_p(pval)
+      rows[[length(rows)+1]] <- hrow
+
+      row_mean <- data.frame(Variable="  Mean (SD)", Total=fmt_mean(x_v),
+                             stringsAsFactors=FALSE)
+      for (i in seq_along(grp_lvls)) {
+        v <- x_v[grp_v == grp_lvls[i]]
+        row_mean[[col_grps[i]]] <- if (length(v) < 2) "NA" else fmt_mean(v)
+      }
+      row_mean[[col_pval]] <- ""
+      rows[[length(rows)+1]] <- row_mean
+
+      row_med <- data.frame(Variable="  Median [Q1 - Q3]", Total=fmt_med(x_v),
+                            stringsAsFactors=FALSE)
+      for (i in seq_along(grp_lvls)) {
+        v <- x_v[grp_v == grp_lvls[i]]
+        row_med[[col_grps[i]]] <- if (length(v) < 2) "NA" else fmt_med(v)
+      }
+      row_med[[col_pval]] <- ""
+      rows[[length(rows)+1]] <- row_med
+
+    # ── Binary ──────────────────────────────────────────────────────────────
+    } else if (meta$type == "binary") {
+      valid <- !is.na(x) & !is.na(grp)
+      x_v   <- as.numeric(x[valid])
+      grp_v <- grp[valid]
+
+      n_tot_v   <- sum(!is.na(x_v))
+      n_yes     <- sum(x_v == 1, na.rm=TRUE)
+      total_str <- sprintf("%d/%d (%.0f%%)", n_yes, n_tot_v,
+                           100*n_yes/max(n_tot_v,1))
+
+      grp_strs <- sapply(grp_lvls, function(g) {
+        xg <- x_v[grp_v == g]
+        ng <- sum(!is.na(xg)); ny <- sum(xg == 1, na.rm=TRUE)
+        sprintf("%d/%d (%.0f%%)", ny, ng, 100*ny/max(ng,1))
+      })
+
+      tbl  <- tryCatch(table(x_v, grp_v), error=function(e) NULL)
+      pval <- tryCatch({
+        if (!is.null(tbl) && all(dim(tbl) >= 1)) {
+          if (parametric) {
+            if (any(chisq.test(tbl, correct=FALSE)$expected < 5))
+              fisher.test(tbl)$p.value
+            else chisq.test(tbl, correct=FALSE)$p.value
+          } else fisher.test(tbl)$p.value
+        } else NA
+      }, error=function(e) NA)
+
+      row <- data.frame(Variable=meta$label, Total=total_str,
+                        stringsAsFactors=FALSE)
+      for (i in seq_along(grp_lvls)) row[[col_grps[i]]] <- grp_strs[i]
+      row[[col_pval]] <- fmt_p(pval)
+      rows[[length(rows)+1]] <- row
+
+    # ── Categorical ──────────────────────────────────────────────────────────
+    } else if (meta$type == "categorical") {
+      valid <- !is.na(x) & !is.na(grp)
+      x_v   <- x[valid]
+      grp_v <- grp[valid]
+
+      if (!is.null(meta$levels_labels)) {
+        x_v <- factor(as.character(x_v))
+        levels(x_v)[levels(x_v) %in% names(meta$levels_labels)] <-
+          meta$levels_labels[levels(x_v)[levels(x_v) %in% names(meta$levels_labels)]]
+      }
+
+      lvls <- sort(unique(as.character(x_v)))
+      tbl  <- tryCatch(table(as.character(x_v), grp_v), error=function(e) NULL)
+      pval <- tryCatch({
+        if (!is.null(tbl)) {
+          if (parametric) {
+            if (any(suppressWarnings(chisq.test(tbl, correct=FALSE))$expected < 5))
+              fisher.test(tbl, simulate.p.value=TRUE)$p.value
+            else chisq.test(tbl, correct=FALSE)$p.value
+          } else fisher.test(tbl, simulate.p.value=TRUE)$p.value
+        } else NA
+      }, error=function(e) NA)
+
+      hrow <- data.frame(Variable=paste0(meta$label," — N (%)"),
+                         Total="", stringsAsFactors=FALSE)
+      for (i in seq_along(grp_lvls)) hrow[[col_grps[i]]] <- ""
+      hrow[[col_pval]] <- fmt_p(pval)
+      rows[[length(rows)+1]] <- hrow
+
+      n_tot_v <- sum(!is.na(as.character(x_v)))
+      for (lv in lvls) {
+        n_lv      <- sum(as.character(x_v) == lv, na.rm=TRUE)
+        total_str <- sprintf("%d (%.0f%%)", n_lv, 100*n_lv/max(n_tot_v,1))
+        grp_strs  <- sapply(grp_lvls, function(g) {
+          xg <- as.character(x_v)[grp_v == g]
+          ng <- sum(!is.na(xg)); nlv <- sum(xg == lv, na.rm=TRUE)
+          sprintf("%d (%.0f%%)", nlv, 100*nlv/max(ng,1))
+        })
+        lrow <- data.frame(Variable=paste0("  ", lv), Total=total_str,
+                           stringsAsFactors=FALSE)
+        for (i in seq_along(grp_lvls)) lrow[[col_grps[i]]] <- grp_strs[i]
+        lrow[[col_pval]] <- ""
+        rows[[length(rows)+1]] <- lrow
+      }
+    }
+  }
+
+  if (length(rows) == 0) return(NULL)
+  result <- do.call(rbind, rows)
+  names(result)[1] <- "Variable"
+  names(result)[2] <- col_total
+  result
+}
+
+# ── Display function ───────────────────────────────────────────────────────────
+display_table1 <- function(tbl, caption_txt) {
+  if (is.null(tbl)) return(invisible(NULL))
+  header_rows  <- which(tbl[[2]] == "" & !grepl("^  ", tbl$Variable))
+  missing_rows <- which(grepl("Missing", tbl$Variable))
+  ncols <- ncol(tbl)
+  tbl %>%
+    kable(caption=caption_txt, align=c("l", rep("c", ncols-1)),
+          escape=FALSE) %>%
+    kable_styling(bootstrap_options=c("striped","hover","condensed","bordered"),
+                  full_width=TRUE, font_size=12) %>%
+    row_spec(0, bold=TRUE, background="#2E74B5", color="white") %>%
+    row_spec(header_rows, bold=TRUE, background="#eaf2fb") %>%
+    row_spec(missing_rows, italic=TRUE, color="#888888") %>%
+    scroll_box(width="100%", height="600px")
+}
+```
+
+---
+
+# Analysis Functions
+
+```{r fonctions}
+# ── ROC + AUC via ROCit (même méthode que DIVE compact) ───────────────────────
+construire_roc <- function(score, class_var) {
+  valid     <- !is.na(score) & !is.na(class_var)
+  score_v   <- as.numeric(score[valid])
+  class_v   <- as.character(class_var[valid])   # "Yes" / "No"
+  roc_obj   <- rocit(score = score_v, class = class_v)
+  ci_obj    <- ciAUC(roc_obj, conf.level = 0.95, method = "delong")
+  df_roc    <- data.frame(FPR = roc_obj$FPR, TPR = roc_obj$TPR)
+  list(
+    roc    = roc_obj,
+    df     = df_roc,
+    auc    = ci_obj$AUC,
+    ci_inf = ci_obj$lower,
+    ci_sup = ci_obj$upper,
+    n      = sum(valid),
+    n_pos  = sum(class_v == "Yes"),
+    n_neg  = sum(class_v == "No")
+  )
+}
+
+# ── Theme graphique ────────────────────────────────────────────────────────────
+theme_roc <- function() {
+  theme_classic(base_size = 14) +
+    theme(
+      plot.title       = element_text(face="bold", size=14),
+      plot.subtitle    = element_text(size=11, color="grey40"),
+      axis.title       = element_text(size=12),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.position  = "right",
+      legend.box       = "vertical",
+      legend.text      = element_text(size=11),
+      legend.key.width = unit(1.5, "cm")
+    )
+}
+
+# ── Performances diagnostiques ─────────────────────────────────────────────────
+calc_perf <- function(variable, reference, seuil) {
+  # reference ici est numérique (0/1)
+  valid <- !is.na(variable) & !is.na(reference)
+  v <- variable[valid]; r <- reference[valid]
+  pred <- ifelse(v >= seuil, 1, 0)
+  TP <- sum(pred==1 & r==1); TN <- sum(pred==0 & r==0)
+  FP <- sum(pred==1 & r==0); FN <- sum(pred==0 & r==1)
+  sens <- if((TP+FN)>0) TP/(TP+FN) else NA
+  spec <- if((TN+FP)>0) TN/(TN+FP) else NA
+  VPP  <- if((TP+FP)>0) TP/(TP+FP) else NA
+  VPN  <- if((TN+FN)>0) TN/(TN+FN) else NA
+  ci_s  <- if(!is.na(sens)&(TP+FN)>0) binom.test(TP,TP+FN)$conf.int else c(NA,NA)
+  ci_sp <- if(!is.na(spec)&(TN+FP)>0) binom.test(TN,TN+FP)$conf.int else c(NA,NA)
+  ci_vp <- if(!is.na(VPP) &(TP+FP)>0) binom.test(TP,TP+FP)$conf.int else c(NA,NA)
+  ci_vn <- if(!is.na(VPN) &(TN+FN)>0) binom.test(TN,TN+FN)$conf.int else c(NA,NA)
+  LRp <- if(!is.na(sens)&!is.na(spec)&spec<1) sens/(1-spec) else NA
+  LRn <- if(!is.na(sens)&!is.na(spec)&spec>0) (1-sens)/spec else NA
+  ci_lrp <- c(NA,NA)
+  if(!is.na(LRp)&TP>0&FP>0){
+    se <- sqrt(1/TP+1/FP); ci_lrp <- exp(log(LRp)+c(-1,1)*1.96*se)}
+  ci_lrn <- c(NA,NA)
+  if(!is.na(LRn)&FN>0&TN>0){
+    se <- sqrt(1/FN+1/TN); ci_lrn <- exp(log(LRn)+c(-1,1)*1.96*se)}
+  data.frame(
+    Seuil=seuil, N=TP+TN+FP+FN,
+    TP=TP, TN=TN, FP=FP, FN=FN,
+    Se=round(sens*100,1),  Se_IC=sprintf("[%.1f-%.1f]",ci_s[1]*100,ci_s[2]*100),
+    Sp=round(spec*100,1),  Sp_IC=sprintf("[%.1f-%.1f]",ci_sp[1]*100,ci_sp[2]*100),
+    VPP=round(VPP*100,1),  VPP_IC=sprintf("[%.1f-%.1f]",ci_vp[1]*100,ci_vp[2]*100),
+    VPN=round(VPN*100,1),  VPN_IC=sprintf("[%.1f-%.1f]",ci_vn[1]*100,ci_vn[2]*100),
+    LRpos=round(LRp,2),    LRpos_IC=sprintf("[%.2f-%.2f]",ci_lrp[1],ci_lrp[2]),
+    LRneg=round(LRn,3),    LRneg_IC=sprintf("[%.3f-%.3f]",ci_lrn[1],ci_lrn[2])
+  )
+}
+
+perf_tous <- function(var, ref) {
+  s <- sort(unique(var[!is.na(var) & !is.na(ref)]))
+  do.call(rbind, lapply(s, function(x) calc_perf(var, ref, x)))
+}
+
+perf_ext_feno <- function(var, ref, pas=1) {
+  v <- var[!is.na(var) & !is.na(ref)]
+  s <- seq(1, ceiling(max(v)), by=pas)
+  do.call(rbind, lapply(s, function(x) calc_perf(var, ref, x)))
+}
+
+perf_ext_eos <- function(var, ref, pas=0.05) {
+  v <- var[!is.na(var) & !is.na(ref)]
+  s <- seq(0.05, ceiling(max(v)/pas)*pas, by=pas)
+  do.call(rbind, lapply(s, function(x) calc_perf(var, ref, x)))
+}
+
+afficher_perf <- function(dat, titre="", seuil_decimals=1) {
+  dat %>%
+    mutate(Seuil=round(Seuil, seuil_decimals)) %>%
+    select(Seuil, Se, Se_IC, Sp, Sp_IC, VPP, VPP_IC, VPN, VPN_IC,
+           LRpos, LRpos_IC, LRneg, LRneg_IC) %>%
+    kable(caption=titre,
+          col.names=c("Threshold",
+                      "Se (%)","95% CI","Sp (%)","95% CI",
+                      "PPV (%)","95% CI","NPV (%)","95% CI",
+                      "LR+","95% CI","LR-","95% CI"),
+          align="c", digits=c(seuil_decimals, rep(1,12))) %>%
+    kable_styling(bootstrap_options=c("striped","hover","condensed","bordered"),
+                  full_width=TRUE, font_size=12) %>%
+    row_spec(0, bold=TRUE, background="#2E74B5", color="white") %>%
+    scroll_box(width="100%", height="400px")
+}
+```
+
+---
+
+# ROC Curve Computation
+
+```{r calcul-roc}
+# ROCit attend le score (numérique) et la classe ("Yes"/"No")
+roc_feno_total   <- construire_roc(pop_totale$ea_feno_niox,   pop_totale$pd20pos_200_char)
+roc_eos_total    <- construire_roc(pop_totale$ea_fsc_eos_val, pop_totale$pd20pos_200_char)
+
+roc_feno_sics    <- construire_roc(pop_sans_ics$ea_feno_niox,   pop_sans_ics$pd20pos_200_char)
+roc_eos_sics     <- construire_roc(pop_sans_ics$ea_fsc_eos_val, pop_sans_ics$pd20pos_200_char)
+
+roc_feno_avecics <- construire_roc(pop_avec_ics$ea_feno_niox,   pop_avec_ics$pd20pos_200_char)
+roc_eos_avecics  <- construire_roc(pop_avec_ics$ea_fsc_eos_val, pop_avec_ics$pd20pos_200_char)
+```
+
+## AUC Summary
+
+```{r recap-auc}
+pop_f <- df %>% filter(sex == 1)
+pop_m <- df %>% filter(sex == 2)
+
+roc_feno_f <- construire_roc(pop_f$ea_feno_niox,   pop_f$pd20pos_200_char)
+roc_eos_f  <- construire_roc(pop_f$ea_fsc_eos_val, pop_f$pd20pos_200_char)
+roc_feno_m <- construire_roc(pop_m$ea_feno_niox,   pop_m$pd20pos_200_char)
+roc_eos_m  <- construire_roc(pop_m$ea_fsc_eos_val, pop_m$pd20pos_200_char)
+
+data.frame(
+  Population = c("Total","Total","No ICS","No ICS","ICS","ICS",
+                 "Female","Female","Male","Male"),
+  Biomarker  = c("FeNO","Eosinophils","FeNO","Eosinophils","FeNO","Eosinophils",
+                 "FeNO","Eosinophils","FeNO","Eosinophils"),
+  N     = c(roc_feno_total$n,    roc_eos_total$n,
+            roc_feno_sics$n,     roc_eos_sics$n,
+            roc_feno_avecics$n,  roc_eos_avecics$n,
+            roc_feno_f$n,        roc_eos_f$n,
+            roc_feno_m$n,        roc_eos_m$n),
+  N_pos = c(roc_feno_total$n_pos,   roc_eos_total$n_pos,
+            roc_feno_sics$n_pos,    roc_eos_sics$n_pos,
+            roc_feno_avecics$n_pos, roc_eos_avecics$n_pos,
+            roc_feno_f$n_pos,       roc_eos_f$n_pos,
+            roc_feno_m$n_pos,       roc_eos_m$n_pos),
+  N_neg = c(roc_feno_total$n_neg,   roc_eos_total$n_neg,
+            roc_feno_sics$n_neg,    roc_eos_sics$n_neg,
+            roc_feno_avecics$n_neg, roc_eos_avecics$n_neg,
+            roc_feno_f$n_neg,       roc_eos_f$n_neg,
+            roc_feno_m$n_neg,       roc_eos_m$n_neg),
+  AUC    = round(c(roc_feno_total$auc,    roc_eos_total$auc,
+                   roc_feno_sics$auc,     roc_eos_sics$auc,
+                   roc_feno_avecics$auc,  roc_eos_avecics$auc,
+                   roc_feno_f$auc,        roc_eos_f$auc,
+                   roc_feno_m$auc,        roc_eos_m$auc), 3),
+  IC_inf = round(c(roc_feno_total$ci_inf,   roc_eos_total$ci_inf,
+                   roc_feno_sics$ci_inf,    roc_eos_sics$ci_inf,
+                   roc_feno_avecics$ci_inf, roc_eos_avecics$ci_inf,
+                   roc_feno_f$ci_inf,       roc_eos_f$ci_inf,
+                   roc_feno_m$ci_inf,       roc_eos_m$ci_inf), 3),
+  IC_sup = round(c(roc_feno_total$ci_sup,   roc_eos_total$ci_sup,
+                   roc_feno_sics$ci_sup,    roc_eos_sics$ci_sup,
+                   roc_feno_avecics$ci_sup, roc_eos_avecics$ci_sup,
+                   roc_feno_f$ci_sup,       roc_eos_f$ci_sup,
+                   roc_feno_m$ci_sup,       roc_eos_m$ci_sup), 3)
+) %>%
+  mutate(`AUC [95% CI]` = sprintf("%.3f [%.3f-%.3f]", AUC, IC_inf, IC_sup)) %>%
+  select(-AUC, -IC_inf, -IC_sup) %>%
+  kable(col.names=c("Population","Biomarker","N","Positives","Negatives",
+                    "AUC [95% CI]"), align="llcccc") %>%
+  kable_styling(bootstrap_options=c("striped","hover","condensed","bordered"),
+                full_width=FALSE) %>%
+  row_spec(0,    bold=TRUE, background="#2E74B5", color="white") %>%
+  row_spec(c(1,2),  background="#ffffff") %>%
+  row_spec(c(3,4),  background="#eaf2fb") %>%
+  row_spec(c(5,6),  background="#ffffff") %>%
+  row_spec(c(7,8),  background="#fef3fb") %>%
+  row_spec(c(9,10), background="#fef3fb")
+```
+
+---
+
+# ROC Curves {.tabset}
+
+## Figure 1 - FeNO, Eosinophils and Interaction, Total Population
+
+```{r fig1-feno-eos-totale}
+df_model <- pop_totale %>%
+  filter(!is.na(ea_feno_niox) & !is.na(ea_fsc_eos_val) & !is.na(pd20pos_200))
+
+model_interaction         <- glm(pd20pos_200 ~ ea_feno_niox * ea_fsc_eos_val,
+                                 data=df_model, family=binomial)
+df_model$prob_interaction <- predict(model_interaction, type="response")
+
+# Classe "Yes"/"No" pour la proba prédite
+df_model$prob_class <- df_model$pd20pos_200_char
+roc_interaction     <- construire_roc(df_model$prob_interaction,
+                                      df_model$prob_class)
+
+lbl_f1 <- sprintf("FeNO (AUC = %.2f [%.2f - %.2f])",
+                  roc_feno_total$auc, roc_feno_total$ci_inf, roc_feno_total$ci_sup)
+lbl_e1 <- sprintf("Eosinophils (AUC = %.2f [%.2f - %.2f])",
+                  roc_eos_total$auc, roc_eos_total$ci_inf, roc_eos_total$ci_sup)
+lbl_i1 <- sprintf("FeNO x Eosinophils interaction (AUC = %.2f [%.2f - %.2f])",
+                  roc_interaction$auc, roc_interaction$ci_inf, roc_interaction$ci_sup)
+
+df_plot <- bind_rows(
+  roc_feno_total$df  %>% mutate(Model="FeNO"),
+  roc_eos_total$df   %>% mutate(Model="Eosinophils"),
+  roc_interaction$df %>% mutate(Model="Interaction")
+) %>% mutate(Model=factor(Model, levels=c("FeNO","Eosinophils","Interaction")))
+
+p <- ggplot(df_plot, aes(x=FPR, y=TPR, color=Model)) +
+  geom_line(size=1.3) +
+  geom_abline(slope=1, intercept=0, linetype="dashed", size=1, color="grey40") +
+  scale_color_manual(
+    values=c("FeNO"=COL_FENO,"Eosinophils"=COL_EOS,"Interaction"=COL_INTERACTION),
+    labels=c("FeNO"=lbl_f1,"Eosinophils"=lbl_e1,"Interaction"=lbl_i1)
+  ) +
+  labs(title="ROC Curves - FeNO, Eosinophils and Interaction",
+       x="\n1 - Specificity (%)", y="Sensitivity (%)\n", color="") +
+  coord_equal() +
+  scale_y_continuous(labels=scales::percent_format()) +
+  scale_x_continuous(labels=scales::percent_format()) +
+  theme_roc()
+
+ggsave("figures_pdf/fig1_feno_eos_interaction_total.pdf",
+       plot=p, width=11, height=6, device=pdf, useDingbats=FALSE)
+print(p)
+```
+
+## Figure 2 - FeNO: Global, ICS-Naive and ICS-Treated
+
+```{r fig2-feno-3pop}
+lbl_f2a <- sprintf("Global population (AUC = %.2f [%.2f - %.2f])",
+                   roc_feno_total$auc, roc_feno_total$ci_inf, roc_feno_total$ci_sup)
+lbl_f2b <- sprintf("ICS-Naive (AUC = %.2f [%.2f - %.2f])",
+                   roc_feno_sics$auc, roc_feno_sics$ci_inf, roc_feno_sics$ci_sup)
+lbl_f2c <- sprintf("ICS-Treated (AUC = %.2f [%.2f - %.2f])",
+                   roc_feno_avecics$auc, roc_feno_avecics$ci_inf,
+                   roc_feno_avecics$ci_sup)
+
+df_plot <- bind_rows(
+  roc_feno_total$df   %>% mutate(Model="Total"),
+  roc_feno_sics$df    %>% mutate(Model="No ICS"),
+  roc_feno_avecics$df %>% mutate(Model="ICS")
+) %>% mutate(Model=factor(Model, levels=c("Total","No ICS","ICS")))
+
+p <- ggplot(df_plot, aes(x=FPR, y=TPR, color=Model)) +
+  geom_line(size=1.3) +
+  geom_abline(slope=1, intercept=0, linetype="dashed", size=1, color="grey40") +
+  scale_color_manual(
+    values=c("Total"=COL_FENO,"No ICS"=COL_EOS,"ICS"=COL_INTERACTION),
+    labels=c("Total"=lbl_f2a,"No ICS"=lbl_f2b,"ICS"=lbl_f2c)
+  ) +
+  labs(title="ROC Curves - FeNO: Global, ICS-Naive and ICS-Treated",
+       x="\n1 - Specificity (%)", y="Sensitivity (%)\n", color="") +
+  coord_equal() +
+  scale_y_continuous(labels=scales::percent_format()) +
+  scale_x_continuous(labels=scales::percent_format()) +
+  theme_roc()
+
+ggsave("figures_pdf/fig2_feno_3populations.pdf",
+       plot=p, width=11, height=6, device=pdf, useDingbats=FALSE)
+print(p)
+```
+
+---
+
+# FeNO Threshold Performance Summary
+
+::: {.section-box}
+Diagnostic performance of two FeNO thresholds across three populations. **FeNO < 30 ppb** is evaluated as a rule-out strategy; **FeNO > 65 ppb** as a rule-in strategy. All metrics computed with exact Clopper-Pearson 95% CI for Se, Sp, PPV, NPV and log-normal 95% CI for LR.
+:::
+
+```{r feno-threshold-table}
+calc_perf_threshold <- function(feno, ref_num, threshold) {
+  valid <- !is.na(feno) & !is.na(ref_num)
+  f <- feno[valid]; r <- ref_num[valid]
+  pred <- as.numeric(f > threshold)
+  TP <- sum(pred==1 & r==1); TN <- sum(pred==0 & r==0)
+  FP <- sum(pred==1 & r==0); FN <- sum(pred==0 & r==1)
+  N  <- TP+TN+FP+FN
+  Se  <- if((TP+FN)>0) TP/(TP+FN) else NA
+  Sp  <- if((TN+FP)>0) TN/(TN+FP) else NA
+  PPV <- if((TP+FP)>0) TP/(TP+FP) else NA
+  NPV <- if((TN+FN)>0) TN/(TN+FN) else NA
+  ci_se  <- if(!is.na(Se) &(TP+FN)>0) binom.test(TP,TP+FN)$conf.int else c(NA,NA)
+  ci_sp  <- if(!is.na(Sp) &(TN+FP)>0) binom.test(TN,TN+FP)$conf.int else c(NA,NA)
+  ci_ppv <- if(!is.na(PPV)&(TP+FP)>0) binom.test(TP,TP+FP)$conf.int else c(NA,NA)
+  ci_npv <- if(!is.na(NPV)&(TN+FN)>0) binom.test(TN,TN+FN)$conf.int else c(NA,NA)
+  LRp <- if(!is.na(Se)&!is.na(Sp)&Sp<1) Se/(1-Sp) else NA
+  LRn <- if(!is.na(Se)&!is.na(Sp)&Sp>0) (1-Se)/Sp else NA
+  ci_lrp <- c(NA,NA)
+  if(!is.na(LRp)&TP>0&FP>0){
+    se_log<-sqrt(1/TP+1/FP); ci_lrp<-exp(log(LRp)+c(-1,1)*1.96*se_log)}
+  ci_lrn <- c(NA,NA)
+  if(!is.na(LRn)&FN>0&TN>0){
+    se_log<-sqrt(1/FN+1/TN); ci_lrn<-exp(log(LRn)+c(-1,1)*1.96*se_log)}
+  fmt_pct <- function(v,ci) if(is.na(v)) "NA" else
+    sprintf("%.1f%% (%.1f-%.1f)", v*100, ci[1]*100, ci[2]*100)
+  fmt_lr  <- function(v,ci) if(is.na(v)) "NA" else
+    sprintf("%.2f (%.2f-%.2f)", v, ci[1], ci[2])
+  data.frame(N=N, Se=fmt_pct(Se,ci_se), Sp=fmt_pct(Sp,ci_sp),
+             PPV=fmt_pct(PPV,ci_ppv), NPV=fmt_pct(NPV,ci_npv),
+             LRpos=fmt_lr(LRp,ci_lrp), LRneg=fmt_lr(LRn,ci_lrn),
+             stringsAsFactors=FALSE)
+}
+
+populations <- list("Global"     = pop_totale,
+                    "ICS-naive"  = pop_sans_ics,
+                    "ICS-treated"= pop_avec_ics)
+thresholds  <- list(list(label="FeNO <= 30 ppb", thr=30),
+                    list(label="FeNO > 65 ppb",  thr=65))
+
+rows_out <- list()
+for (pop_name in names(populations)) {
+  pop_df <- populations[[pop_name]]
+  for (th in thresholds) {
+    r   <- calc_perf_threshold(pop_df$ea_feno_niox, pop_df$pd20pos_200, th$thr)
+    n_c <- sum(pop_df$ea_feno_niox > th$thr, na.rm=TRUE)
+    rows_out[[length(rows_out)+1]] <- data.frame(
+      Population = pop_name,
+      Threshold  = paste0(th$label, " (n=", n_c, ")"),
+      r, stringsAsFactors=FALSE)
+  }
+}
+
+do.call(rbind, rows_out) %>%
+  kable(caption="Diagnostic Performance of FeNO Thresholds by Population",
+        col.names=c("Population","Threshold","N",
+                    "Se % (95% CI)","Sp % (95% CI)",
+                    "PPV % (95% CI)","NPV % (95% CI)",
+                    "LR+ (95% CI)","LR- (95% CI)"),
+        align="llccccccc") %>%
+  kable_styling(bootstrap_options=c("striped","hover","condensed","bordered"),
+                full_width=TRUE, font_size=12) %>%
+  row_spec(0,    bold=TRUE, background="#2E74B5", color="white") %>%
+  row_spec(c(1,2), background="#ffffff") %>%
+  row_spec(c(3,4), background="#eaf2fb") %>%
+  row_spec(c(5,6), background="#ffffff")
+```
+
+# Diagnostic Performance {.tabset}
+
+## Total Population - FeNO {.tabset}
+
+### Observed Thresholds
+
+```{r perf-total-feno-obs}
+pf_tot <- perf_tous(pop_totale$ea_feno_niox, pop_totale$pd20pos_200)
+afficher_perf(pf_tot, "FeNO - Total Population - Observed Thresholds",
+              seuil_decimals=1)
+```
+
+### Extrapolated Thresholds (step = 1 ppb)
+
+```{r perf-total-feno-ext}
+pfe_tot <- perf_ext_feno(pop_totale$ea_feno_niox, pop_totale$pd20pos_200)
+afficher_perf(pfe_tot,
+              "FeNO - Total Population - Extrapolated Thresholds (1 ppb)",
+              seuil_decimals=1)
+```
+
+## Total Population - Eosinophils {.tabset}
+
+### Observed Thresholds
+
+```{r perf-total-eos-obs}
+pe_tot <- perf_tous(pop_totale$ea_fsc_eos_val, pop_totale$pd20pos_200)
+afficher_perf(pe_tot, "Eosinophils - Total Population - Observed Thresholds",
+              seuil_decimals=2)
+```
+
+### Extrapolated Thresholds (step = 0.05 G/L)
+
+```{r perf-total-eos-ext}
+pee_tot <- perf_ext_eos(pop_totale$ea_fsc_eos_val, pop_totale$pd20pos_200)
+afficher_perf(pee_tot,
+              "Eosinophils - Total Population - Extrapolated Thresholds (0.05 G/L)",
+              seuil_decimals=2)
+```
+
+## No ICS - FeNO {.tabset}
+
+### Observed Thresholds
+
+```{r perf-sics-feno-obs}
+pf_sics <- perf_tous(pop_sans_ics$ea_feno_niox, pop_sans_ics$pd20pos_200)
+afficher_perf(pf_sics, "FeNO - No ICS - Observed Thresholds", seuil_decimals=1)
+```
+
+### Extrapolated Thresholds (step = 1 ppb)
+
+```{r perf-sics-feno-ext}
+pfe_sics <- perf_ext_feno(pop_sans_ics$ea_feno_niox, pop_sans_ics$pd20pos_200)
+afficher_perf(pfe_sics, "FeNO - No ICS - Extrapolated Thresholds (1 ppb)",
+              seuil_decimals=1)
+```
+
+## No ICS - Eosinophils {.tabset}
+
+### Observed Thresholds
+
+```{r perf-sics-eos-obs}
+pe_sics <- perf_tous(pop_sans_ics$ea_fsc_eos_val, pop_sans_ics$pd20pos_200)
+afficher_perf(pe_sics, "Eosinophils - No ICS - Observed Thresholds",
+              seuil_decimals=2)
+```
+
+### Extrapolated Thresholds (step = 0.05 G/L)
+
+```{r perf-sics-eos-ext}
+pee_sics <- perf_ext_eos(pop_sans_ics$ea_fsc_eos_val, pop_sans_ics$pd20pos_200)
+afficher_perf(pee_sics,
+              "Eosinophils - No ICS - Extrapolated Thresholds (0.05 G/L)",
+              seuil_decimals=2)
+```
+
+## ICS - FeNO {.tabset}
+
+### Observed Thresholds
+
+```{r perf-avecics-feno-obs}
+pf_ics <- perf_tous(pop_avec_ics$ea_feno_niox, pop_avec_ics$pd20pos_200)
+afficher_perf(pf_ics, "FeNO - ICS - Observed Thresholds", seuil_decimals=1)
+```
+
+### Extrapolated Thresholds (step = 1 ppb)
+
+```{r perf-avecics-feno-ext}
+pfe_ics <- perf_ext_feno(pop_avec_ics$ea_feno_niox, pop_avec_ics$pd20pos_200)
+afficher_perf(pfe_ics, "FeNO - ICS - Extrapolated Thresholds (1 ppb)",
+              seuil_decimals=1)
+```
+
+## ICS - Eosinophils {.tabset}
+
+### Observed Thresholds
+
+```{r perf-avecics-eos-obs}
+pe_ics <- perf_tous(pop_avec_ics$ea_fsc_eos_val, pop_avec_ics$pd20pos_200)
+afficher_perf(pe_ics, "Eosinophils - ICS - Observed Thresholds",
+              seuil_decimals=2)
+```
+
+### Extrapolated Thresholds (step = 0.05 G/L)
+
+```{r perf-avecics-eos-ext}
+pee_ics <- perf_ext_eos(pop_avec_ics$ea_fsc_eos_val, pop_avec_ics$pd20pos_200)
+afficher_perf(pee_ics,
+              "Eosinophils - ICS - Extrapolated Thresholds (0.05 G/L)",
+              seuil_decimals=2)
+```
+
+# ICS Subgroup Analysis — FeNO Diagnostic Accuracy (Panel C)
+
+```{r ics-subgroup-forestplot, echo=FALSE, warning=FALSE, fig.width=8, fig.height=3.5}
+
+compute_auc_ci <- function(score, class_char, label) {
+  roc_obj <- rocit(score = as.numeric(score), class = as.character(class_char))
+  ci      <- ciAUC(roc_obj, conf.level = 0.95, method = "delong")
+  data.frame(label=label, n=length(score),
+             auc=ci$AUC, lower=ci$lower, upper=ci$upper)
+}
+
+res <- bind_rows(
+  compute_auc_ci(pop_avec_ics$ea_feno_niox, pop_avec_ics$pd20pos_200_char, "With ICS"),
+  compute_auc_ci(pop_sans_ics$ea_feno_niox, pop_sans_ics$pd20pos_200_char, "Without ICS")
+)
+
+res$label <- factor(res$label, levels=rev(c("With ICS","Without ICS")))
+
+label_right <- paste0(
+  sprintf("%.3f", res$auc), "  ",
+  "[", sprintf("%.3f", res$lower), ", ", sprintf("%.3f", res$upper), "]",
+  "   n=", res$n
+)
+names(label_right) <- as.character(res$label)
+
+ggplot(res, aes(x=auc, y=label)) +
+  geom_vline(xintercept=0.5, linetype="dashed", color="grey60", linewidth=0.5) +
+  geom_segment(aes(x=lower, xend=upper, y=label, yend=label),
+               linewidth=0.9, color="black") +
+  geom_point(aes(x=auc), size=3.5, shape=15, color="black") +
+  geom_text(aes(x=1.01, label=label_right[as.character(label)]),
+            hjust=0, size=3.3, color="grey20", family="sans") +
+  annotate("text", x=0.49, y=2.6, label="ICS use",
+           hjust=1, vjust=0, size=3.8, fontface="bold", color="grey15") +
+  annotate("text", x=-Inf, y=Inf, label="C.",
+           hjust=-0.3, vjust=1.4, size=5, fontface="bold") +
+  scale_x_continuous(limits=c(0.49, 1.25),
+                     breaks=c(0.5,0.6,0.7,0.8,0.9,1.0),
+                     labels=c("0.5","0.6","0.7","0.8","0.9","1.0"),
+                     expand=c(0,0)) +
+  coord_cartesian(clip="off") +
+  labs(x="AUC (95% CI)", y=NULL) +
+  theme_classic(base_size=12) +
+  theme(
+    axis.title.x = element_text(size=11, face="bold", color="grey20"),
+    axis.text.x  = element_text(size=10, color="grey30"),
+    axis.text.y  = element_text(size=11, color="grey15"),
+    axis.ticks.y = element_blank(),
+    axis.line.y  = element_blank(),
+    axis.line.x  = element_line(color="grey30", linewidth=0.5),
+    axis.ticks.x = element_line(color="grey50", linewidth=0.4),
+    plot.margin  = margin(10, 120, 10, 10)
+  )
+```
+
+# Supplementary — Table S1 by Sex {.tabset}
+
+::: {.section-box}
+**Sex subgroups:** Female = sex = 1 ; Male = sex = 2.
+:::
+
+### Parametric Tests (t-test / Chi-2)
+
+```{r tableS1-parametric}
+tS1_param <- build_table1(
+  data         = df,
+  group_var    = "sex",
+  group_labels = c("Female (sex=1)", "Male (sex=2)"),
+  parametric   = TRUE
+)
+display_table1(tS1_param,
+  "Table S1 — Patient Characteristics by Sex (Parametric Tests)")
+```
+
+### Non-Parametric Tests (Mann-Whitney / Chi-2)
+
+```{r tableS1-nonparametric}
+tS1_nonparam <- build_table1(
+  data         = df,
+  group_var    = "sex",
+  group_labels = c("Female (sex=1)", "Male (sex=2)"),
+  parametric   = FALSE
+)
+display_table1(tS1_nonparam,
+  "Table S1 — Patient Characteristics by Sex (Non-Parametric Tests)")
+```
+
+---
+
+# Session Information
+
+```{r session-info}
+si <- sessionInfo()
+data.frame(
+  Element = c("R version","Platform","Analysis date",
+              "ROCit","ggplot2","dplyr","kableExtra"),
+  Valeur  = c(paste(si$R.version$major, si$R.version$minor, sep="."),
+              si$platform,
+              format(Sys.Date(), "%d %B %Y"),
+              as.character(packageVersion("ROCit")),
+              as.character(packageVersion("ggplot2")),
+              as.character(packageVersion("dplyr")),
+              as.character(packageVersion("kableExtra")))
+) %>%
+  kable(align="ll") %>%
+  kable_styling(bootstrap_options=c("condensed","bordered"), full_width=FALSE) %>%
+  row_spec(0, bold=TRUE, background="#2E74B5", color="white")
+```
